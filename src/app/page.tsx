@@ -6,6 +6,7 @@ import { formatDate, GiftCard } from "@/components/GiftCard";
 import { CartIcon, HeartIcon } from "@/components/icons";
 import { Wordmark } from "@/components/Wordmark";
 import { RequestForm } from "@/components/RequestForm";
+import { GroupDialog } from "@/components/GroupDialog";
 import { SideSheet } from "@/components/SideSheet";
 import { post, streamSearch } from "@/lib/client";
 import { useList, type ListName } from "@/lib/saved";
@@ -51,7 +52,10 @@ export default function Home() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [buying, setBuying] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [sheet, setSheet] = useState<ListName | null>(null);
+  const [groupGift, setGroupGift] = useState<Suggestion | null>(null);
+  const closeGroup = useCallback(() => setGroupGift(null), []);
   const closeSheet = useCallback(() => setSheet(null), []);
   const cart = useList("cart");
   const favorites = useList("favorites");
@@ -160,6 +164,12 @@ export default function Home() {
         </div>
       </header>
       <SideSheet list={sheet} buying={buying} onClose={closeSheet} onCheckout={buy} />
+      <GroupDialog
+        key={groupGift?.id ?? "none"}
+        gift={groupGift}
+        recipient={meta?.understood.recipient ?? ""}
+        onClose={closeGroup}
+      />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-24 sm:px-6">
         <section className="pt-10 pb-10 sm:pt-16">
@@ -176,8 +186,10 @@ export default function Home() {
           prompt={prompt}
           fields={fields}
           busy={phase === "running"}
+          detailsOpen={detailsOpen}
           onPrompt={setPrompt}
           onFields={setFields}
+          onToggleDetails={() => setDetailsOpen((open) => !open)}
           onSubmit={submit}
         />
 
@@ -187,7 +199,19 @@ export default function Home() {
           {phase === "question" && question && <FollowUp question={question} onAnswer={answer} />}
 
           {meta && rounds.length > 0 && (
-            <Understood meta={meta} savedAt={savedAt} />
+            <Understood
+              meta={meta}
+              savedAt={savedAt}
+              onSetBudget={() => {
+                setDetailsOpen(true);
+                // Wait for the panel to unfold (and lose `inert`) before focusing
+                setTimeout(() => {
+                  const el = document.getElementById("budget");
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el?.focus({ preventScroll: true });
+                }, 320);
+              }}
+            />
           )}
 
           {rounds.map((round, i) => (
@@ -202,7 +226,7 @@ export default function Home() {
               ) : (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {round.map((s, j) => (
-                    <GiftCard key={s.id} s={s} index={j} buying={buying} onBuyNow={buy} />
+                    <GiftCard key={s.id} s={s} index={j} buying={buying} onBuyNow={buy} onGroup={setGroupGift} />
                   ))}
                 </div>
               )}
@@ -297,7 +321,7 @@ function FollowUp({ question, onAnswer }: { question: string; onAnswer: (text: s
 }
 
 // What the agent understood, incl. assumptions the buyer can correct
-function Understood({ meta, savedAt }: { meta: Meta; savedAt: string | null }) {
+function Understood({ meta, savedAt, onSetBudget }: { meta: Meta; savedAt: string | null; onSetBudget: () => void }) {
   const { understood, budget, deliverBy, deliveryWarning } = meta;
   const budgetText =
     budget.max == null ? "Any budget" : `Up to $${budget.max}${budget.min ? ` (from $${budget.min})` : ""}`;
@@ -314,11 +338,7 @@ function Understood({ meta, savedAt }: { meta: Meta; savedAt: string | null }) {
             <>
               <span className="text-zinc-400"> · assumed · </span>
               <button
-                onClick={() => {
-                  const el = document.getElementById("budget");
-                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  el?.focus();
-                }}
+                onClick={onSetBudget}
                 className="underline underline-offset-2 hover:text-zinc-900"
               >
                 set budget

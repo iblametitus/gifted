@@ -16,16 +16,18 @@ type Props = {
   prompt: string;
   fields: GiftFields;
   busy: boolean;
+  detailsOpen: boolean;
   onPrompt: (prompt: string) => void;
   onFields: (fields: GiftFields) => void;
+  onToggleDetails: () => void;
   onSubmit: () => void;
 };
 
-export function RequestForm({ prompt, fields, busy, onPrompt, onFields, onSubmit }: Props) {
+// Free text by default; the detail fields fold out on demand
+export function RequestForm({ prompt, fields, busy, detailsOpen, onPrompt, onFields, onToggleDetails, onSubmit }: Props) {
   const set = (patch: Partial<GiftFields>) => onFields({ ...fields, ...patch });
-  const hasInput =
-    prompt.trim() !== "" ||
-    Object.entries(fields).some(([k, v]) => k !== "budgetApprox" && v !== undefined && v !== "");
+  const filled = Object.entries(fields).filter(([k, v]) => k !== "budgetApprox" && v !== undefined && v !== "").length;
+  const hasInput = prompt.trim() !== "" || filled > 0;
 
   return (
     <form
@@ -46,85 +48,103 @@ export function RequestForm({ prompt, fields, busy, onPrompt, onFields, onSubmit
         className="block w-full resize-none rounded-2xl bg-white px-4 pt-4 pb-3 text-lg text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:ring-4 focus:ring-white/40"
       />
 
-      <div className="p-4 pt-5">
-        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-white/75">
-          Details <span className="font-normal normal-case tracking-normal">· optional, these win over the text</span>
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="For">
-            <input
-              className={input}
-              placeholder="Brother, 30"
-              value={fields.recipient ?? ""}
-              onChange={(e) => set({ recipient: e.target.value || undefined })}
-            />
-          </Field>
-          <Field label="Interests">
-            <input
-              className={input}
-              placeholder="Coffee, travel"
-              value={fields.interests ?? ""}
-              onChange={(e) => set({ interests: e.target.value || undefined })}
-            />
-          </Field>
-          <Field label="Occasion">
-            <input
-              className={input}
-              placeholder="Birthday"
-              value={fields.occasion ?? ""}
-              onChange={(e) => set({ occasion: e.target.value || undefined })}
-            />
-          </Field>
-          <Field label="Budget (USD)">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-zinc-400">$</span>
+      <div className="flex items-center justify-between gap-3 px-2 pt-3">
+        <button
+          type="button"
+          onClick={onToggleDetails}
+          aria-expanded={detailsOpen}
+          aria-controls="details"
+          className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white"
+        >
+          {detailsOpen ? "Hide details" : "Add details"}
+          {filled > 0 && (
+            <span className="rounded-full bg-white px-1.5 text-xs leading-5 font-semibold text-paypal-dark">{filled}</span>
+          )}
+          <svg
+            viewBox="0 0 20 20"
+            aria-hidden
+            className={`size-4 transition-transform duration-200 ${detailsOpen ? "rotate-180" : ""}`}
+          >
+            <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          </svg>
+        </button>
+        <button
+          disabled={!hasInput || busy}
+          className="h-11 rounded-full bg-paypal-dark px-6 font-medium text-white transition hover:bg-[#00225f] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? "Working on it…" : "Find gifts"}
+        </button>
+      </div>
+
+      {/* grid-rows 0fr -> 1fr animates the height smoothly; inert keeps hidden fields out of the tab order */}
+      <div
+        id="details"
+        inert={!detailsOpen}
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${detailsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      >
+        <div className="overflow-hidden">
+          <div className="px-4 pt-4 pb-1">
+            <p className="mb-3 text-xs text-white/75">Optional. Anything you fill in here wins over the text.</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="For">
                 <input
-                  id="budget"
-                  className={`${input} pl-7`}
-                  type="number"
-                  min={1}
-                  inputMode="decimal"
-                  placeholder="80"
-                  value={fields.budgetUsd ?? ""}
-                  onChange={(e) => set({ budgetUsd: e.target.value ? Number(e.target.value) : undefined })}
+                  className={input}
+                  placeholder="Brother, 30"
+                  value={fields.recipient ?? ""}
+                  onChange={(e) => set({ recipient: e.target.value || undefined })}
                 />
-              </div>
-              <button
-                type="button"
-                onClick={() => set({ budgetApprox: !fields.budgetApprox })}
-                aria-pressed={!!fields.budgetApprox}
-                title="Around: up to ~6% more is fine. Exact: never above."
-                className={`shrink-0 rounded-xl border px-3 text-sm transition ${
-                  fields.budgetApprox
-                    ? "border-white bg-white text-paypal-dark"
-                    : "border-white/40 text-white hover:border-white"
-                }`}
-              >
-                {fields.budgetApprox ? "Around" : "Max"}
-              </button>
+              </Field>
+              <Field label="Interests">
+                <input
+                  className={input}
+                  placeholder="Coffee, travel"
+                  value={fields.interests ?? ""}
+                  onChange={(e) => set({ interests: e.target.value || undefined })}
+                />
+              </Field>
+              <Field label="Occasion">
+                <input
+                  className={input}
+                  placeholder="Birthday"
+                  value={fields.occasion ?? ""}
+                  onChange={(e) => set({ occasion: e.target.value || undefined })}
+                />
+              </Field>
+              <Field label="Budget (USD)" className="lg:col-span-2">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-zinc-400">$</span>
+                    <input
+                      id="budget"
+                      className={`${input} pl-7`}
+                      type="number"
+                      min={1}
+                      inputMode="decimal"
+                      placeholder="80"
+                      value={fields.budgetUsd ?? ""}
+                      onChange={(e) => set({ budgetUsd: e.target.value ? Number(e.target.value) : undefined })}
+                    />
+                  </div>
+                  <BudgetMode
+                    approx={!!fields.budgetApprox}
+                    onChange={(budgetApprox) => set({ budgetApprox })}
+                  />
+                </div>
+              </Field>
+              <Field label="Deliver by">
+                <input
+                  className={input}
+                  type="date"
+                  value={fields.deliverBy ?? ""}
+                  onChange={(e) => set({ deliverBy: e.target.value || undefined })}
+                />
+              </Field>
             </div>
-          </Field>
-          <Field label="Deliver by">
-            <input
-              className={input}
-              type="date"
-              value={fields.deliverBy ?? ""}
-              onChange={(e) => set({ deliverBy: e.target.value || undefined })}
-            />
-          </Field>
-          <div className="flex items-end">
-            <button
-              disabled={!hasInput || busy}
-              className="h-[46px] w-full rounded-xl bg-paypal-dark font-medium text-white transition hover:bg-[#00225f] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy ? "Working on it…" : "Find gifts"}
-            </button>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 px-4 pb-3">
+      <div className="flex flex-wrap gap-2 px-4 pt-3 pb-3">
         {EXAMPLES.map((example) => (
           <button
             key={example}
@@ -140,9 +160,46 @@ export function RequestForm({ prompt, fields, busy, onPrompt, onFields, onSubmit
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// Two-way switch "Max | Around": a white thumb slides under the active option
+function BudgetMode({ approx, onChange }: { approx: boolean; onChange: (approx: boolean) => void }) {
+  const options = [
+    { value: false, label: "Max", hint: "Never above your budget" },
+    { value: true, label: "Around", hint: "Up to ~6% more is fine" },
+  ];
   return (
-    <label className="block">
+    <div
+      role="radiogroup"
+      aria-label="Budget mode"
+      className="relative grid shrink-0 grid-cols-2 rounded-xl border border-white/40 p-1 text-sm"
+    >
+      <span
+        aria-hidden
+        className={`absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-sm transition-transform duration-200 ease-out ${
+          approx ? "translate-x-full" : ""
+        }`}
+      />
+      {options.map((o) => (
+        <button
+          key={o.label}
+          type="button"
+          role="radio"
+          aria-checked={approx === o.value}
+          title={o.hint}
+          onClick={() => onChange(o.value)}
+          className={`relative z-10 rounded-lg px-3 font-medium transition-colors ${
+            approx === o.value ? "text-paypal-dark" : "text-white/85 hover:text-white"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
+  return (
+    <label className={`block ${className}`}>
       <span className="mb-1.5 block text-sm text-white/90">{label}</span>
       {children}
     </label>

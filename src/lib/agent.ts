@@ -150,6 +150,29 @@ async function pickGifts(request: string, brief: GiftBrief, candidates: Product[
     });
 }
 
+// Short invite for a group gift, ready to paste into a group chat
+const Invite = z.object({ message: z.string() });
+
+export async function writeInvite(opts: {
+  title: string;
+  recipient: string | null;
+  organizer: string;
+  share: number;
+  people: number;
+}) {
+  const res = await client.messages.parse({
+    model: MODEL,
+    max_tokens: 1000,
+    output_config: { effort: "low", format: zodOutputFormat(Invite) },
+    system:
+      "Write a short, warm invite (2-3 sentences, English) for a group chat, asking friends to chip in on a group gift. " +
+      "Mention the gift, who it's for, the share per person and that nobody is charged unless everyone joins. " +
+      "No hashtags, at most one emoji, don't include a link (it is added below).",
+    messages: [{ role: "user", content: JSON.stringify(opts) }],
+  });
+  return parsedOrThrow(res).message;
+}
+
 // Free text and form fields as one message for the model
 function describeRequest(prompt: string, fields: GiftFields) {
   const lines = [

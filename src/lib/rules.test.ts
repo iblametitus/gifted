@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { budgetRange, resolveBudget } from "./budget.ts";
 import type { Product } from "./channel3.ts";
+import { splitShares } from "./shares.ts";
 import { cartQuote, quote } from "./shipping.ts";
 
 test("'$80' is a hard limit", () => {
@@ -74,4 +75,12 @@ test("delivery skips weekends", () => {
   assert.equal(quote(product(80), new Date("2026-11-05T12:00:00Z")).deliveryBy, "2026-11-12");
   // Fri 2026-11-06 + 5 business days -> Fri 2026-11-13
   assert.equal(quote(product(80), new Date("2026-11-06T12:00:00Z")).deliveryBy, "2026-11-13");
+});
+
+test("group shares add up to the exact total", () => {
+  assert.deepEqual(splitShares(100, 3), [33.34, 33.33, 33.33]);
+  assert.deepEqual(splitShares(79.95, 4), [19.99, 19.99, 19.99, 19.98]);
+  assert.deepEqual(splitShares(80, 1), [80]);
+  const shares = splitShares(66.99, 5);
+  assert.equal(Math.round(shares.reduce((a, b) => a + b, 0) * 100), 6699);
 });

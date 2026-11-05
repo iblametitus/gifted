@@ -4,9 +4,15 @@ import { useList } from "@/lib/saved";
 import type { Suggestion } from "@/lib/types";
 import { HeartIcon } from "./icons";
 
-type Props = { s: Suggestion; index: number; buying: boolean; onBuyNow: (ids: string[]) => void };
+type Props = {
+  s: Suggestion;
+  index: number;
+  buying: boolean;
+  onBuyNow: (ids: string[]) => void;
+  onGroup: (s: Suggestion) => void;
+};
 
-export function GiftCard({ s, index, buying, onBuyNow }: Props) {
+export function GiftCard({ s, index, buying, onBuyNow, onGroup }: Props) {
   const favorites = useList("favorites");
   const cart = useList("cart");
   const isFavorite = favorites.has(s.id);
@@ -69,6 +75,12 @@ export function GiftCard({ s, index, buying, onBuyNow }: Props) {
               Buy now
             </button>
           </div>
+          <button
+            onClick={() => onGroup(s)}
+            className="mt-2 w-full rounded-full py-2 text-sm font-medium text-paypal transition hover:bg-paypal-soft hover:text-paypal-dark"
+          >
+            Gift together · split with friends
+          </button>
         </div>
       </div>
     </article>

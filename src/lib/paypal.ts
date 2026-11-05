@@ -117,3 +117,103 @@ export async function captureOrder(orderId: string) {
     return paypal<CapturedOrder>(`/v2/checkout/orders/${encodeURIComponent(orderId)}`);
   }
 }
+
+// --- Group gifts: reserve each share first, collect only when everyone is in ---
+
+export type Address = {
+  address_line_1?: string;
+  address_line_2?: string;
+  admin_area_2?: string;
+  admin_area_1?: string;
+  postal_code?: string;
+  country_code?: string;
+};
+
+type AuthorizedOrder = {
+  id: string;
+  status: string;
+  payer?: { name?: { given_name?: string; surname?: string } };
+  purchase_units: {
+    custom_id?: string;
+    shipping?: { name?: { full_name?: string }; address?: Address };
+    payments?: { authorizations?: { id: string; status: string; amount: { value: string } }[] };
+  }[];
+};
+
+// One contributor's share as an AUTHORIZE order: the money is reserved, not taken.
+// Only the first contributor (the organizer) gives the shipping address.
+export async function createShareOrder(opts: {
+  groupId: string;
+  contributor: string;
+  amount: number;
+  description: string;
+  withShipping: boolean;
+  origin: string;
+}) {
+  const order = await paypal<{ id: string; links: Link[] }>("/v2/checkout/orders", {
+    intent: "AUTHORIZE",
+    purchase_units: [
+      {
+        reference_id: "share",
+        custom_id: opts.groupId,
+        description: opts.description.slice(0, 127),
+        amount: usd(opts.amount),
+      },
+    ],
+    payment_source: {
+      paypal: {
+        experience_context: {
+          brand_name: "Gifted",
+          user_action: "CONTINUE",
+          shipping_preference: opts.withShipping ? "GET_FROM_FILE" : "NO_SHIPPING",
+          return_url: `${opts.origin}/api/groups/${opts.groupId}/return?name=${encodeURIComponent(opts.contributor)}`,
+          cancel_url: `${opts.origin}/group/${opts.groupId}`,
+        },
+      },
+    },
+  });
+  const approveUrl = order.links.find((l) => l.rel === "payer-action")?.href;
+  if (!approveUrl) throw new Error("PayPal returned no approval link");
+  return { orderId: order.id, approveUrl };
+}
+
+// After the buyer approved: turn the order into an authorization (reload-safe)
+export async function authorizeOrder(orderId: string) {
+  const path = `/v2/checkout/orders/${encodeURIComponent(orderId)}`;
+  let order: AuthorizedOrder;
+  try {
+    order = await paypal<AuthorizedOrder>(`${path}/authorize`, {});
+  } catch (error) {
+    const already =
+      error instanceof PayPalError && error.details.details?.some((d) => d.issue === "ORDER_ALREADY_AUTHORIZED");
+    if (!already) throw error;
+    order = await paypal<AuthorizedOrder>(path);
+  }
+  const unit = order.purchase_units[0];
+  const authorization = unit?.payments?.authorizations?.[0];
+  if (!authorization) throw new Error(`No authorization on order (status ${order.status})`);
+  return {
+    authorizationId: authorization.id,
+    amount: Number(authorization.amount.value),
+    groupId: unit.custom_id,
+    shipping: unit.shipping?.address
+      ? { name: unit.shipping.name?.full_name ?? "", address: unit.shipping.address }
+      : null,
+  };
+}
+
+export async function captureAuthorization(authorizationId: string) {
+  return paypal<{ id: string; status: string }>(
+    `/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/capture`,
+    { final_capture: true },
+  );
+}
+
+export async function voidAuthorization(authorizationId: string) {
+  // void answers 204 without a body
+  const res = await fetch(`${BASE}/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/void`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${await accessToken()}`, "content-type": "application/json" },
+  });
+  if (!res.ok && res.status !== 422) throw new PayPalError(res.status, await res.json().catch(() => ({})));
+}
