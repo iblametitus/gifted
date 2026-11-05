@@ -29,7 +29,7 @@ async function checkChannel3() {
   for (const p of products) {
     const offer = p.offers?.[0];
     console.log(
-      `- ${p.title} | ${offer?.price?.price} ${offer?.price?.currency} | ${offer?.price?.availability} | ${offer?.domain} | images: ${p.images?.length ?? 0}`,
+      `- ${p.title} | ${offer?.price?.price} ${offer?.price?.currency} | ${offer?.availability} | ${offer?.domain} | images: ${p.images?.length ?? 0}`,
     );
   }
   // Full first product, so we can see every field (shipping? delivery?)

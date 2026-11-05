@@ -10,15 +10,30 @@ constraints, and completes the purchase through PayPal (Sandbox).
 
 ## Stack
 - Next.js (App Router, TypeScript, Tailwind)
-- Claude API (agent with tool use)
+- Claude API (Haiku 5.5, structured outputs)
 - Channel3 (product search)
 - PayPal Orders API v2 (Sandbox)
+
+## How it works
+1. **Understand:** Claude turns the free-text request into a brief (recipient, interests, budget, deadline) and 2-3 search queries.
+2. **Search:** Channel3 is queried in parallel; only in-stock USD offers within the budget (shipping included) remain.
+3. **Pick:** Claude picks the 3 best gifts and explains why each one fits.
+4. **Buy:** price and stock are checked again with Channel3, shipping comes from our own rules
+   (the app is the merchant of record), then a PayPal order is created and captured after approval.
+
+Budget rules: "$80" never goes above $80, "around $80" allows up to $85.
+Results are saved in the browser: the same request shows the same ideas, new ones only via "Show other ideas".
 
 ## Local setup
 ```bash
 npm install
 cp .env.example .env.local   # fill in your keys
 npm run dev                  # http://localhost:3000
+```
+
+Run the tests:
+```bash
+npm test
 ```
 
 Check that all API keys work:
