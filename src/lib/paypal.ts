@@ -1,7 +1,7 @@
 // PayPal Orders v2 (Sandbox): create order -> buyer approves on PayPal -> capture.
 
 import type { Product } from "./channel3";
-import type { Quote } from "./shipping";
+import type { CartQuote } from "./shipping";
 
 const BASE = process.env.PAYPAL_API_BASE ?? "https://api-m.sandbox.paypal.com";
 
@@ -24,7 +24,11 @@ async function accessToken() {
 async function paypal<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: { authorization: `Bearer ${await accessToken()}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${await accessToken()}`,
+      "content-type": "application/json",
+      prefer: "return=representation", // full order incl. items in every response
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json();
@@ -45,25 +49,28 @@ const usd = (n: number) => ({ currency_code: "USD", value: n.toFixed(2) });
 
 type Link = { rel: string; href: string };
 
-export async function createOrder(product: Product, q: Quote, origin: string) {
+// One order for one gift or a whole cart. custom_id carries the product ids,
+// so the return page knows what was bought (e.g. to empty the cart).
+export async function createOrder(products: Product[], q: CartQuote, origin: string) {
+  const description =
+    products.length === 1 ? `Gift: ${products[0].title}` : `${products.length} gifts from Gift Agent`;
   const order = await paypal<{ id: string; links: Link[] }>("/v2/checkout/orders", {
     intent: "CAPTURE",
     purchase_units: [
       {
-        reference_id: product.id,
-        description: `Gift: ${product.title}`.slice(0, 127),
+        reference_id: "gifts",
+        custom_id: products.map((p) => p.id).join(","),
+        description: description.slice(0, 127),
         amount: {
           ...usd(q.total),
-          breakdown: { item_total: usd(q.itemPrice), shipping: usd(q.shipping) },
+          breakdown: { item_total: usd(q.subtotal), shipping: usd(q.shipping) },
         },
-        items: [
-          {
-            name: product.title.slice(0, 127),
-            quantity: "1",
-            unit_amount: usd(q.itemPrice),
-            category: "PHYSICAL_GOODS",
-          },
-        ],
+        items: products.map((p) => ({
+          name: p.title.slice(0, 127),
+          quantity: "1",
+          unit_amount: usd(p.price),
+          category: "PHYSICAL_GOODS",
+        })),
       },
     ],
     payment_source: {
@@ -90,7 +97,10 @@ export type CapturedOrder = {
   payer?: { email_address?: string; name?: { given_name?: string } };
   purchase_units: {
     reference_id: string;
+    custom_id?: string;
     description?: string;
+    items?: { name: string; unit_amount: { value: string } }[];
+    amount?: { breakdown?: { item_total?: { value: string }; shipping?: { value: string } } };
     shipping?: { name?: { full_name?: string }; address?: { address_line_1?: string; admin_area_2?: string; admin_area_1?: string; postal_code?: string } };
     payments?: { captures?: { id: string; status: string; amount: { value: string; currency_code: string } }[] };
   }[];

@@ -1,18 +1,20 @@
 // The gift agent: understand the request, search Channel3, pick the best 3.
+// Progress is reported step by step through `emit`, so the UI can show what the agent is doing.
 
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { budgetRange } from "./budget";
+import { resolveBudget } from "./budget";
 import { searchProducts, type Product } from "./channel3";
-import { quote, type Quote } from "./shipping";
+import { quote } from "./shipping";
+import type { GiftFields, SearchEvent, SearchRequest, Suggestion } from "./types";
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-5-5";
 const client = new Anthropic();
 
-// Step 1: free text -> structured search plan
+// Step 1: request -> structured search plan
 const GiftBrief = z.object({
-  recipient: z.string().describe("Who the gift is for, e.g. 'brother, 30'"),
+  recipient: z.string().describe("Who the gift is for, e.g. 'brother, 30'. Empty if unknown"),
   occasion: z.string().nullable(),
   interests: z.array(z.string()),
   // The model only reads the budget; the allowed range is computed in budget.ts
@@ -22,11 +24,15 @@ const GiftBrief = z.object({
     .describe("True only if the user softened it: 'around', 'about', 'roughly', '~', 'ish'"),
   min_price_usd: z.number().nullable().describe("Only if the user explicitly named a lower bound"),
   deliver_by: z.string().nullable().describe("ISO date if the user named a deadline"),
+  follow_up_question: z
+    .string()
+    .nullable()
+    .describe("One short, friendly question if too little is known about the person, else null"),
   search_queries: z
     .array(z.string())
     .describe("2-3 short, distinct product search queries, like a shopper would type them"),
 });
-export type GiftBrief = z.infer<typeof GiftBrief>;
+type GiftBrief = z.infer<typeof GiftBrief>;
 
 // Step 3: candidates -> top 3. Candidates are numbered: short numbers get mixed up
 // far less often than random product ids, and the title echo lets us catch mix-ups.
@@ -40,10 +46,12 @@ const Picks = z.object({
   ),
 });
 
-export type Suggestion = Product & { reason: string; quote: Quote };
-
-export async function understandRequest(prompt: string): Promise<GiftBrief> {
+async function understandRequest(request: string, mayAsk: boolean): Promise<GiftBrief> {
   const today = new Date().toISOString().slice(0, 10);
+  const asking = mayAsk
+    ? "If the request says nothing about what the person likes (no interests, hobbies, personality or wishes), " +
+      "set follow_up_question to one short, friendly question about exactly that. Otherwise null. "
+    : "Do not ask questions: set follow_up_question to null and make the best of what you know. ";
   const res = await client.messages.parse({
     model: MODEL,
     max_tokens: 4000,
@@ -51,31 +59,69 @@ export async function understandRequest(prompt: string): Promise<GiftBrief> {
     system:
       `You turn a gift request into a search plan for a US product catalog. Today is ${today}. ` +
       "Prices are in USD. If no budget is given, leave the budget fields null. " +
+      "Form fields override anything the free text says. " +
+      asking +
       "Search queries name concrete product types, not the occasion.",
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: request }],
   });
   return parsedOrThrow(res);
 }
 
-// exclude: product ids already shown, for "Show other ideas"
-export async function findGifts(prompt: string, exclude: string[] = []) {
-  const brief = await understandRequest(prompt);
-  const { min, max } = budgetRange({
+export async function findGifts(req: SearchRequest, emit: (event: SearchEvent) => void) {
+  const { fields } = req;
+  const request = describeRequest(req.prompt, fields);
+
+  emit({ type: "step", step: "understanding" });
+  const brief = await understandRequest(request, !req.followUpAsked);
+  if (!req.followUpAsked && brief.follow_up_question) {
+    emit({ type: "question", question: brief.follow_up_question });
+    return;
+  }
+
+  const budget = resolveBudget(fields, {
     budgetUsd: brief.budget_usd,
     approximate: brief.budget_is_approximate,
     minUsd: brief.min_price_usd,
   });
+  const deliverBy = fields.deliverBy || brief.deliver_by;
+  const queries = brief.search_queries.slice(0, 3);
 
+  emit({ type: "step", step: "searching", detail: queries.join(" · ") });
   const results = await Promise.all(
-    brief.search_queries.slice(0, 3).map((query) => searchProducts({ query, minPrice: min, maxPrice: max })),
+    queries.map((query) => searchProducts({ query, minPrice: budget.min, maxPrice: budget.max })),
   );
   // The budget is what the buyer pays, so shipping counts too
-  const seen = new Set(exclude);
+  const seen = new Set(req.exclude ?? []);
   const candidates = dedupe(results.flat()).filter(
-    (p) => !seen.has(p.id) && (max == null || quote(p).total <= max),
+    (p) => !seen.has(p.id) && (budget.max == null || quote(p).total <= budget.max),
   );
-  if (candidates.length === 0) return { brief, suggestions: [] as Suggestion[] };
 
+  let suggestions: Suggestion[] = [];
+  if (candidates.length > 0) {
+    emit({ type: "step", step: "picking", detail: `${candidates.length} products in your budget` });
+    suggestions = await pickGifts(request, brief, candidates);
+  }
+
+  // Delivery time is the same for every product (our own shipping rules)
+  const earliest = quote({ price: 0, weightLb: null } as Product).deliveryBy;
+  const deliveryWarning =
+    deliverBy && earliest > deliverBy
+      ? `Our earliest delivery is ${formatDate(earliest)}, after your date (${formatDate(deliverBy)}).`
+      : null;
+
+  emit({
+    type: "result",
+    result: {
+      understood: { recipient: brief.recipient, occasion: brief.occasion, interests: brief.interests },
+      budget,
+      deliverBy,
+      deliveryWarning,
+      suggestions,
+    },
+  });
+}
+
+async function pickGifts(request: string, brief: GiftBrief, candidates: Product[]): Promise<Suggestion[]> {
   const res = await client.messages.parse({
     model: MODEL,
     max_tokens: 4000,
@@ -89,21 +135,34 @@ export async function findGifts(prompt: string, exclude: string[] = []) {
       {
         role: "user",
         content:
-          `Gift request: ${prompt}\n\nBrief: ${JSON.stringify(brief)}\n\n` +
+          `Gift request:\n${request}\n\nBrief: ${JSON.stringify(brief)}\n\n` +
           `Candidates:\n${JSON.stringify(candidates.map(forPrompt))}`,
       },
     ],
   });
 
-  const suggestions = parsedOrThrow(res)
+  return parsedOrThrow(res)
     .picks.filter((pick) => candidates[pick.candidate - 1]?.title === pick.title)
     .slice(0, 3)
     .map((pick) => {
       const product = candidates[pick.candidate - 1];
       return { ...product, reason: pick.reason, quote: quote(product) };
     });
+}
 
-  return { brief, suggestions, model: res.model };
+// Free text and form fields as one message for the model
+function describeRequest(prompt: string, fields: GiftFields) {
+  const lines = [
+    fields.recipient && `- For: ${fields.recipient}`,
+    fields.interests && `- Interests: ${fields.interests}`,
+    fields.occasion && `- Occasion: ${fields.occasion}`,
+    fields.budgetUsd && `- Budget: ${fields.budgetApprox ? "around " : "max "}$${fields.budgetUsd}`,
+    fields.deliverBy && `- Deliver by: ${fields.deliverBy}`,
+  ].filter(Boolean);
+  const parts = [];
+  if (prompt.trim()) parts.push(`Free text:\n${prompt.trim()}`);
+  if (lines.length) parts.push(`Form fields (these override the free text):\n${lines.join("\n")}`);
+  return parts.join("\n\n");
 }
 
 function parsedOrThrow<T>(res: { stop_reason: string | null; parsed_output?: T | null }): T {
@@ -115,6 +174,9 @@ function parsedOrThrow<T>(res: { stop_reason: string | null; parsed_output?: T |
 function dedupe(products: Product[]) {
   return [...new Map(products.map((p) => [p.id, p])).values()];
 }
+
+const formatDate = (iso: string) =>
+  new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 // Compact view for the model: enough to judge fit, without image/buy URLs
 function forPrompt(p: Product, i: number) {

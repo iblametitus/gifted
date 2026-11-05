@@ -1,10 +1,14 @@
 // We are the merchant of record, so shipping comes from our own rules
 // (Channel3 has no shipping or delivery data). Demo rules, US only.
+// One order ships once: free from $75, otherwise the rate of the heaviest item.
 
 import type { Product } from "./channel3";
 
 const HANDLING_DAYS = 1;
 const TRANSIT_DAYS = 4;
+const FREE_SHIPPING_FROM = 75;
+
+type Priced = Pick<Product, "price" | "weightLb">;
 
 export type Quote = {
   itemPrice: number;
@@ -13,18 +17,32 @@ export type Quote = {
   deliveryBy: string; // ISO date
 };
 
-export function quote(product: Product, from = new Date()): Quote {
-  const shipping = shippingCost(product);
+export type CartQuote = {
+  subtotal: number;
+  shipping: number;
+  total: number;
+  deliveryBy: string;
+};
+
+export function cartQuote(products: Priced[], from = new Date()): CartQuote {
+  const subtotal = round(products.reduce((sum, p) => sum + p.price, 0));
+  const shipping =
+    products.length === 0 || subtotal >= FREE_SHIPPING_FROM ? 0 : Math.max(...products.map(rateByWeight));
   return {
-    itemPrice: product.price,
+    subtotal,
     shipping,
-    total: round(product.price + shipping),
+    total: round(subtotal + shipping),
     deliveryBy: addBusinessDays(from, HANDLING_DAYS + TRANSIT_DAYS).toISOString().slice(0, 10),
   };
 }
 
-function shippingCost({ price, weightLb }: Product) {
-  if (price >= 75) return 0;
+// A single gift bought on its own
+export function quote(product: Priced, from = new Date()): Quote {
+  const { subtotal, ...rest } = cartQuote([product], from);
+  return { itemPrice: subtotal, ...rest };
+}
+
+function rateByWeight({ weightLb }: Priced) {
   if (weightLb == null || weightLb <= 1) return 5.99;
   if (weightLb <= 5) return 9.99;
   return 14.99;
