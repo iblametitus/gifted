@@ -53,7 +53,7 @@ type Link = { rel: string; href: string };
 // so the return page knows what was bought (e.g. to empty the cart).
 export async function createOrder(products: Product[], q: CartQuote, origin: string) {
   const description =
-    products.length === 1 ? `Gift: ${products[0].title}` : `${products.length} gifts from Gift Agent`;
+    products.length === 1 ? `Gift: ${products[0].title}` : `${products.length} gifts from Gifted`;
   const order = await paypal<{ id: string; links: Link[] }>("/v2/checkout/orders", {
     intent: "CAPTURE",
     purchase_units: [
@@ -76,7 +76,7 @@ export async function createOrder(products: Product[], q: CartQuote, origin: str
     payment_source: {
       paypal: {
         experience_context: {
-          brand_name: "Gift Agent",
+          brand_name: "Gifted",
           user_action: "PAY_NOW",
           shipping_preference: "GET_FROM_FILE",
           return_url: `${origin}/checkout/return`,

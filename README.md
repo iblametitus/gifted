@@ -1,6 +1,6 @@
-# Gift Agent
+# Gifted
 
-**One prompt. One choice. Gift handled.**
+**Your AI gift agent. One prompt. One choice. Gift handled.**
 
 An AI shopping agent for the PayPal AI Hackathon 2026. Describe who the gift is for, your budget and
 the latest delivery date. The agent finds real products, checks price and delivery against your

@@ -9,7 +9,7 @@ import type { Suggestion } from "./types";
 export type ListName = "cart" | "favorites";
 
 const EMPTY: Suggestion[] = [];
-const keyOf = (list: ListName) => `gift-agent:${list}`;
+const keyOf = (list: ListName) => `gifted:${list}`;
 const listeners = new Set<() => void>();
 const cache = new Map<string, { raw: string | null; items: Suggestion[] }>();
 

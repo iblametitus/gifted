@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gift Agent",
-  description: "One prompt. One choice. Gift handled.",
+  title: "Gifted · Your AI gift agent",
+  description: "Gifted, your AI gift agent. One prompt. One choice. Gift handled.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

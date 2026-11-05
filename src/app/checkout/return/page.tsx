@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ClearCart } from "@/components/ClearCart";
+import { Wordmark } from "@/components/Wordmark";
 import { captureOrder } from "@/lib/paypal";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
@@ -9,8 +10,8 @@ type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 export default function CheckoutReturn({ searchParams }: { searchParams: SearchParams }) {
   return (
     <main className="mx-auto w-full max-w-xl px-4 py-16 sm:px-6">
-      <Link href="/" className="font-semibold tracking-tight">
-        Gift Agent
+      <Link href="/">
+        <Wordmark />
       </Link>
       <Suspense fallback={<Message title="Confirming your payment…" text="This takes a few seconds." />}>
         <Confirmation searchParams={searchParams} />
@@ -43,7 +44,7 @@ async function Confirmation({ searchParams }: { searchParams: SearchParams }) {
     <div className="animate-fade-up mt-12">
       <ClearCart ids={unit.custom_id?.split(",") ?? []} />
       <div className="flex size-12 items-center justify-center rounded-full bg-paypal-soft text-2xl">🎁</div>
-      <h1 className="mt-5 text-3xl font-semibold tracking-tight">Gift handled.</h1>
+      <h1 className="mt-5 text-3xl font-semibold tracking-tight">You&apos;ve been Gifted.</h1>
       <p className="mt-2 text-zinc-500">
         Paid with PayPal{unit.shipping?.name?.full_name ? `, shipping to ${unit.shipping.name.full_name}` : ""}.
       </p>

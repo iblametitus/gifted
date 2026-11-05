@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { AgentProgress, type StepState } from "@/components/AgentProgress";
 import { formatDate, GiftCard } from "@/components/GiftCard";
 import { CartIcon, HeartIcon } from "@/components/icons";
+import { Wordmark } from "@/components/Wordmark";
 import { RequestForm } from "@/components/RequestForm";
 import { SideSheet } from "@/components/SideSheet";
 import { post, streamSearch } from "@/lib/client";
@@ -17,7 +18,7 @@ type Meta = Omit<SearchResult, "suggestions">;
 type Saved = { rounds: Suggestion[][]; meta: Meta; effectivePrompt: string; savedAt: string };
 
 const storageKey = (prompt: string, fields: GiftFields) =>
-  `gift-agent:${JSON.stringify([prompt.trim().toLowerCase().replace(/\s+/g, " "), fields])}`;
+  `gifted:${JSON.stringify([prompt.trim().toLowerCase().replace(/\s+/g, " "), fields])}`;
 
 function load(key: string): Saved | null {
   try {
@@ -145,7 +146,7 @@ export default function Home() {
   return (
     <div className="flex min-h-full flex-col">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-6 sm:px-6">
-        <span className="font-semibold tracking-tight">Gift Agent</span>
+        <Wordmark />
         <div className="flex items-center gap-1">
           <span className="mr-2 hidden rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-500 sm:inline">
             PayPal Sandbox demo
