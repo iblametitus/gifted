@@ -1,4 +1,5 @@
 import { addContribution } from "@/lib/groups";
+import { publicOrigin } from "@/lib/guard";
 import { authorizeOrder } from "@/lib/paypal";
 
 // GET /api/groups/:id/return?token=<orderId>&name=<contributor>
@@ -7,7 +8,7 @@ import { authorizeOrder } from "@/lib/paypal";
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const url = new URL(request.url);
-  const back = (status: string) => Response.redirect(new URL(`/group/${id}?${status}`, url.origin), 303);
+  const back = (status: string) => Response.redirect(new URL(`/group/${id}?${status}`, publicOrigin(request)), 303);
 
   const token = url.searchParams.get("token");
   const name = (url.searchParams.get("name") ?? "").trim().slice(0, 40) || "A friend";

@@ -40,3 +40,9 @@ Check that all API keys work:
 ```bash
 node --env-file=.env.local scripts/check-apis.mjs "gift for coffee lover"
 ```
+
+## Deployment (Render)
+`render.yaml` describes one free Node web service. Render Dashboard -> New -> Blueprint -> this repo,
+then enter the secret values once. After the first deploy, set `APP_URL` to the service URL so PayPal
+sends buyers back to the right place. Search, group gifts and checkout are rate-limited per IP and per day
+(`src/lib/guard.ts`, counters in Upstash).

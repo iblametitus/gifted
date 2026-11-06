@@ -1,4 +1,5 @@
 import { getGroup, nextShare } from "@/lib/groups";
+import { publicOrigin, rateLimit } from "@/lib/guard";
 import { createShareOrder } from "@/lib/paypal";
 
 // POST /api/groups/:id/contribute  { name }  ->  { approveUrl }
@@ -8,6 +9,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim().slice(0, 40) : "";
   if (!name) return Response.json({ error: "Please enter your name" }, { status: 400 });
+  const limited = await rateLimit(request, "checkout");
+  if (limited) return limited;
 
   try {
     const group = await getGroup(id);
@@ -21,7 +24,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       amount: share,
       description: `Your share: ${group.product.title}${group.recipient ? ` for ${group.recipient}` : ""}`,
       withShipping: group.contributions.length === 0,
-      origin: new URL(request.url).origin,
+      origin: publicOrigin(request),
     });
     return Response.json({ approveUrl: order.approveUrl });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { writeInvite } from "@/lib/agent";
 import { getProduct } from "@/lib/channel3";
 import { createGroup } from "@/lib/groups";
+import { rateLimit } from "@/lib/guard";
 import { splitShares } from "@/lib/shares";
 import { quote } from "@/lib/shipping";
 
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
     return Response.json({ error: `A group gift needs 2 to ${MAX_PEOPLE} people` }, { status: 400 });
   }
   const recipient = text(body?.recipient, 40);
+  const limited = await rateLimit(request, "group");
+  if (limited) return limited;
 
   try {
     // Fresh price and stock, never the browser's numbers

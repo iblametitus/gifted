@@ -1,0 +1,38 @@
+# Render Blueprint: one free Node web service built from this repo.
+# Deploy: Render Dashboard -> New -> Blueprint -> pick iblametitus/gifted.
+# Values with sync:false are asked for once in the dashboard (never commit them).
+services:
+  - type: web
+    name: gifted
+    runtime: node
+    plan: free
+    region: oregon # judges and Channel3 shops are mostly US
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-5-5
+      - key: PAYPAL_API_BASE
+        value: https://api-m.sandbox.paypal.com
+      # Sandbox demo for judges: "let the others join" fills a group with simulated friends
+      - key: DEMO_MODE
+        value: "true"
+      # Public URL for PayPal return links, e.g. https://gifted.onrender.com (set after the first deploy)
+      - key: APP_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CHANNEL3_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

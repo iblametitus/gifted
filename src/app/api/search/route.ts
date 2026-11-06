@@ -1,4 +1,5 @@
 import { findGifts } from "@/lib/agent";
+import { rateLimit } from "@/lib/guard";
 import type { GiftFields, SearchEvent, SearchRequest } from "@/lib/types";
 
 // POST /api/search  { prompt, fields, exclude?, followUpAsked? }
@@ -7,6 +8,8 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const req = parseRequest(body);
   if (!req) return Response.json({ error: "Describe the person or fill in at least one field" }, { status: 400 });
+  const limited = await rateLimit(request, "search");
+  if (limited) return limited;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

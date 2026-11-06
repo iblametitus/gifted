@@ -1,4 +1,5 @@
 import { getProduct } from "@/lib/channel3";
+import { publicOrigin, rateLimit } from "@/lib/guard";
 import { createOrder } from "@/lib/paypal";
 import { cartQuote } from "@/lib/shipping";
 
@@ -13,6 +14,8 @@ export async function POST(request: Request) {
     : [];
   if (ids.length === 0) return Response.json({ error: "productIds is required" }, { status: 400 });
   if (ids.length > MAX_ITEMS) return Response.json({ error: `At most ${MAX_ITEMS} gifts per order` }, { status: 400 });
+  const limited = await rateLimit(request, "checkout");
+  if (limited) return limited;
 
   try {
     // Re-check price and stock right before payment
@@ -26,7 +29,7 @@ export async function POST(request: Request) {
     const available = products.filter((p) => p !== null);
 
     const q = cartQuote(available);
-    const order = await createOrder(available, q, new URL(request.url).origin);
+    const order = await createOrder(available, q, publicOrigin(request));
     return Response.json({ ...order, quote: q });
   } catch (error) {
     console.error(error);
