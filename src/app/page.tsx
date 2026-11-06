@@ -10,6 +10,7 @@ import { GroupDialog } from "@/components/GroupDialog";
 import { SideSheet } from "@/components/SideSheet";
 import { post, streamSearch } from "@/lib/client";
 import { useList, type ListName } from "@/lib/saved";
+import { withFreshDelivery } from "@/lib/shipping";
 import type { GiftFields, SearchRequest, SearchResult, Suggestion } from "@/lib/types";
 
 type Meta = Omit<SearchResult, "suggestions">;
@@ -24,7 +25,9 @@ const storageKey = (prompt: string, fields: GiftFields) =>
 function load(key: string): Saved | null {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const saved: Saved = JSON.parse(raw);
+    return { ...saved, rounds: saved.rounds.map((round) => withFreshDelivery(round)) };
   } catch {
     return null;
   }

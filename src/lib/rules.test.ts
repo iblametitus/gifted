@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { budgetRange, resolveBudget } from "./budget.ts";
 import type { Product } from "./channel3.ts";
 import { splitShares } from "./shares.ts";
-import { cartQuote, quote } from "./shipping.ts";
+import { cartQuote, quote, withFreshDelivery } from "./shipping.ts";
 
 test("'$80' is a hard limit", () => {
   assert.deepEqual(budgetRange({ budgetUsd: 80, approximate: false, minUsd: null }), { min: 48, max: 80 });
@@ -75,6 +75,14 @@ test("delivery skips weekends", () => {
   assert.equal(quote(product(80), new Date("2026-11-05T12:00:00Z")).deliveryBy, "2026-11-12");
   // Fri 2026-11-06 + 5 business days -> Fri 2026-11-13
   assert.equal(quote(product(80), new Date("2026-11-06T12:00:00Z")).deliveryBy, "2026-11-13");
+});
+
+test("saved ideas get today's delivery date but keep their price", () => {
+  const savedThursday = { id: "x", quote: quote(product(80), new Date("2026-11-05T12:00:00Z")) };
+  const [shownFriday] = withFreshDelivery([savedThursday], new Date("2026-11-06T12:00:00Z"));
+  assert.equal(shownFriday.quote.deliveryBy, "2026-11-13");
+  assert.equal(shownFriday.quote.total, savedThursday.quote.total);
+  assert.equal(savedThursday.quote.deliveryBy, "2026-11-12"); // original untouched
 });
 
 test("group shares add up to the exact total", () => {

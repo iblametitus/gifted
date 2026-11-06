@@ -32,8 +32,20 @@ export function cartQuote(products: Priced[], from = new Date()): CartQuote {
     subtotal,
     shipping,
     total: round(subtotal + shipping),
-    deliveryBy: addBusinessDays(from, HANDLING_DAYS + TRANSIT_DAYS).toISOString().slice(0, 10),
+    deliveryBy: deliveryDate(from),
   };
+}
+
+// Latest delivery date for an order placed on `from` (ISO date)
+export function deliveryDate(from = new Date()) {
+  return addBusinessDays(from, HANDLING_DAYS + TRANSIT_DAYS).toISOString().slice(0, 10);
+}
+
+// Saved gifts keep their prices (checked again at checkout), but the delivery date
+// has to count from today, otherwise yesterday's ideas promise a day too early.
+export function withFreshDelivery<T extends { quote: Quote }>(items: T[], from = new Date()): T[] {
+  const deliveryBy = deliveryDate(from);
+  return items.map((item) => ({ ...item, quote: { ...item.quote, deliveryBy } }));
 }
 
 // A single gift bought on its own
