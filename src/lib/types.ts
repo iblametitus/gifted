@@ -25,7 +25,14 @@ export type Suggestion = Product & { reason: string; quote: Quote };
 export type BudgetSource = "field" | "text" | "assumed";
 
 export type SearchResult = {
-  understood: { recipient: string; occasion: string | null; interests: string[] };
+  // groupSize: set when several people give together ("we're 5 friends")
+  understood: {
+    recipient: string;
+    occasion: string | null;
+    interests: string[];
+    groupSize?: number | null;
+    perPersonUsd?: number | null; // what the user said per head ("$25 each")
+  };
   budget: { min: number | null; max: number | null; source: BudgetSource };
   deliverBy: string | null;
   // Set when our earliest delivery is after the requested date

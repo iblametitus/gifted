@@ -171,6 +171,7 @@ export default function Home() {
         key={groupGift?.id ?? "none"}
         gift={groupGift}
         recipient={meta?.understood.recipient ?? ""}
+        groupSize={meta?.understood.groupSize}
         onClose={closeGroup}
       />
 
@@ -229,7 +230,15 @@ export default function Home() {
               ) : (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {round.map((s, j) => (
-                    <GiftCard key={s.id} s={s} index={j} buying={buying} onBuyNow={buy} onGroup={setGroupGift} />
+                    <GiftCard
+                      key={s.id}
+                      s={s}
+                      index={j}
+                      buying={buying}
+                      onBuyNow={buy}
+                      onGroup={setGroupGift}
+                      groupSize={meta?.understood.groupSize}
+                    />
                   ))}
                 </div>
               )}
@@ -328,15 +337,24 @@ function Understood({ meta, savedAt, onSetBudget }: { meta: Meta; savedAt: strin
   const { understood, budget, deliverBy, deliveryWarning } = meta;
   const budgetText =
     budget.max == null ? "Any budget" : `Up to $${budget.max}${budget.min ? ` (from $${budget.min})` : ""}`;
+  // For a group, what each person pays tells more than the total
+  // (the user's own per-head amount if they named one, the budget field may still override it)
+  const perHead = !understood.groupSize || budget.max == null
+    ? ""
+    : understood.perPersonUsd && budget.source === "text"
+      ? ` · $${understood.perPersonUsd} each`
+      : ` · ~$${Math.round(budget.max / understood.groupSize)} each`;
 
   return (
     <div className="animate-fade-up">
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        {understood.groupSize && <Chip>{understood.groupSize} people</Chip>}
         {understood.recipient && <Chip>For {understood.recipient}</Chip>}
         {understood.occasion && <Chip>{understood.occasion}</Chip>}
         {understood.interests.length > 0 && <Chip>{understood.interests.join(", ")}</Chip>}
         <Chip muted={budget.source === "assumed"}>
           {budgetText}
+          {perHead}
           {budget.source === "assumed" && (
             <>
               <span className="text-zinc-400"> · assumed · </span>

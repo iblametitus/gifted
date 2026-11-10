@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { post } from "@/lib/client";
 import type { PublicGroup } from "@/lib/groups";
 import { formatDate } from "./GiftCard";
@@ -18,8 +18,27 @@ export function GroupView({ group, notice, demo }: { group: PublicGroup; notice:
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Live page: while shares are open, pull the latest state every 3 s, so a friend's
+  // reservation shows up in every open window without reloading.
+  useEffect(() => {
+    if (group.status !== "collecting") return;
+    const timer = setInterval(() => {
+      if (!document.hidden) router.refresh();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [group.status, router]);
+
+  // The moment the group closes in front of you (live, or as the last one to join):
+  // play the agent's closing steps one by one instead of showing them all at once.
+  const [lastStatus, setLastStatus] = useState(group.status);
+  const [celebrate, setCelebrate] = useState(notice === "joined" && group.status !== "collecting");
+  if (group.status !== lastStatus) {
+    setLastStatus(group.status);
+    if (lastStatus === "collecting") setCelebrate(true);
+  }
+
   const total = group.quote.total;
-  const paid = group.contributors.reduce((sum, c) => sum + c.amount, 0);
+  const paid = group.contributors.reduce((sum, c) => sum + (c.charged ?? c.amount), 0);
   const people = group.shares.length;
   const joined = group.contributors.length;
   const forWhom = group.recipient ? ` for ${group.recipient}` : "";
@@ -64,7 +83,7 @@ export function GroupView({ group, notice, demo }: { group: PublicGroup; notice:
 
   return (
     <div className="animate-fade-up pt-6">
-      <Banner group={group} notice={notice} />
+      <Banner key={group.status} group={group} notice={notice} />
 
       <p className="mt-8 text-sm font-medium uppercase tracking-wider text-paypal">Group gift{forWhom}</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
@@ -101,13 +120,17 @@ export function GroupView({ group, notice, demo }: { group: PublicGroup; notice:
             </div>
             <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-zinc-100">
               <div
-                className="h-full rounded-full bg-paypal transition-[width] duration-700"
-                style={{ width: `${Math.min(100, (paid / total) * 100)}%` }}
+                className={`h-full rounded-full transition-[width,background-color] duration-700 ${
+                  group.status === "complete" ? "bg-emerald-600" : group.status === "cancelled" ? "bg-zinc-300" : "bg-paypal"
+                }`}
+                style={{ width: `${group.status === "complete" ? 100 : Math.min(100, (paid / total) * 100)}%` }}
               />
             </div>
           </div>
         </div>
       </div>
+
+      {group.closing && <ClosingSteps key={group.status} group={group} animate={celebrate} />}
 
       {/* Who's in */}
       <ul className="mt-8 grid gap-2 sm:grid-cols-2">
@@ -197,19 +220,144 @@ export function GroupView({ group, notice, demo }: { group: PublicGroup; notice:
   );
 }
 
+// The agent's last job, step by step: re-check the gift, collect every share, done.
+// When something fails, the step shows where it stopped and that nobody paid.
+function ClosingSteps({ group, animate }: { group: PublicGroup; animate: boolean }) {
+  const closing = group.closing!;
+  const reason = group.cancelReason;
+  const real = group.contributors.filter((c) => !c.demo).length;
+  const simulated = group.contributors.length - real;
+
+  const priceDetail =
+    closing.priceNow == null
+      ? reason === "sold-out"
+        ? "No longer in stock"
+        : "Couldn't reach the shop"
+      : closing.priceNow > closing.priceThen + 0.005
+        ? `Price went up: ${usd(closing.priceThen)} → ${usd(closing.priceNow)}`
+        : closing.priceNow < closing.priceThen - 0.005
+          ? `Cheaper now: ${usd(closing.priceThen)} → ${usd(closing.priceNow)}. Everyone pays less`
+          : `Still ${usd(closing.priceNow)}, in stock`;
+  const checkFailed = reason === "sold-out" || reason === "price-changed" || reason === "check-failed";
+
+  const steps: { doing: string; done: string; detail: string; failed?: boolean }[] = [
+    { doing: "Checking price and stock…", done: "Checked price and stock", detail: priceDetail, failed: checkFailed },
+  ];
+  if (!checkFailed) {
+    steps.push({
+      doing: `Collecting ${group.contributors.length} reservations…`,
+      done:
+        reason === "payment-failed"
+          ? "A payment didn't go through"
+          : `Collected ${group.contributors.length} reservations with PayPal`,
+      detail:
+        reason === "payment-failed"
+          ? "Collected shares were refunded in full, the rest released"
+          : simulated
+            ? `${real} real PayPal ${real === 1 ? "share" : "shares"}, ${simulated} simulated (sandbox demo)`
+            : "Every share at once, nobody paid early",
+      failed: reason === "payment-failed",
+    });
+  }
+  steps.push(
+    group.status === "complete"
+      ? {
+          doing: "Buying the gift…",
+          done: "Gift bought",
+          detail: `Arrives by ${formatDate(group.quote.deliveryBy)}${group.recipient ? ` for ${group.recipient}` : ""}`,
+        }
+      : { doing: "Releasing reservations…", done: "Nobody was charged", detail: "Every reservation released" },
+  );
+
+  // Reveal one step at a time when it happens live; reduced motion shows everything at once
+  const [shown, setShown] = useState(animate ? 0 : steps.length);
+  useEffect(() => {
+    if (shown >= steps.length) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = setTimeout(() => setShown((n) => n + 1), reduced ? 0 : 900);
+    return () => clearTimeout(timer);
+  }, [shown, steps.length]);
+
+  const receipts = group.contributors.filter((c) => c.receipt || c.demo);
+
+  return (
+    <section className="animate-fade-up mt-8 rounded-3xl border border-zinc-200 p-5 sm:p-6">
+      <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">What the agent did</p>
+      <ol className="mt-4 space-y-3">
+        {steps.map((step, i) => {
+          if (i > shown) return null;
+          const done = i < shown;
+          return (
+            <li key={step.done} className="animate-fade-up flex gap-3">
+              <span
+                aria-hidden
+                className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${
+                  !done
+                    ? "animate-pulse bg-zinc-300"
+                    : step.failed
+                      ? "bg-zinc-500"
+                      : i === steps.length - 1 && group.status === "complete"
+                        ? "bg-emerald-600"
+                        : "bg-zinc-900"
+                }`}
+              >
+                {done ? (step.failed ? "!" : "✓") : ""}
+              </span>
+              <div>
+                <p className={`font-medium ${done ? "" : "text-zinc-500"}`}>{done ? step.done : step.doing}</p>
+                {done && <p className="text-sm text-zinc-500">{step.detail}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      {group.status === "complete" && shown >= steps.length && receipts.length > 0 && (
+        <div className="animate-fade-up mt-5 border-t border-zinc-100 pt-4">
+          <p className="text-sm font-medium">PayPal receipts</p>
+          <ul className="mt-2 divide-y divide-zinc-100 text-sm">
+            {receipts.map((c, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 py-2">
+                <span>{c.name}</span>
+                <span className="flex items-center gap-3 text-zinc-500">
+                  <span className="font-mono text-xs">{c.receipt ?? "simulated"}</span>
+                  <span className="text-zinc-900">
+                    {c.charged != null && c.charged < c.amount - 0.005 && (
+                      <s className="mr-1.5 text-zinc-400">{usd(c.amount)}</s>
+                    )}
+                    {usd(c.charged ?? c.amount)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const CANCELLED: Record<NonNullable<PublicGroup["cancelReason"]>, string> = {
+  expired: "Time ran out before everyone joined. Every reservation was released.",
+  "sold-out": "Everyone was in, but the gift sold out in the meantime. The agent stopped and released every reservation.",
+  "price-changed": "Everyone was in, but the price went up. The agent stopped instead of charging more and released every reservation.",
+  "check-failed": "Everyone was in, but we couldn't confirm price and stock. To be safe, every reservation was released.",
+  "payment-failed": "One payment didn't go through. Shares already collected were refunded in full, the rest released.",
+};
+
 function Banner({ group, notice }: { group: PublicGroup; notice: Notice }) {
   if (group.status === "complete") {
     return (
-      <Box tone="success">
-        <strong>Gift bought 🎁</strong> All {group.shares.length} chipped in, PayPal collected every share and the
-        order is placed{group.recipient ? ` for ${group.recipient}` : ""}.
+      <Box tone="done">
+        <strong>Gift bought.</strong> All {group.shares.length} were in, the agent re-checked price and stock and PayPal
+        collected every share{group.recipient ? `. ${group.recipient} is getting their gift` : ""}.
       </Box>
     );
   }
   if (group.status === "cancelled") {
     return (
       <Box tone="muted">
-        Time ran out before everyone joined. All reservations were released, <strong>nobody was charged</strong>.
+        {CANCELLED[group.cancelReason ?? "expired"]} <strong>Nobody was charged.</strong>
       </Box>
     );
   }
@@ -229,9 +377,10 @@ function Banner({ group, notice }: { group: PublicGroup; notice: Notice }) {
   return null;
 }
 
-function Box({ tone, children }: { tone: "success" | "muted" | "error"; children: React.ReactNode }) {
+function Box({ tone, children }: { tone: "success" | "done" | "muted" | "error"; children: React.ReactNode }) {
   const styles = {
     success: "border-paypal/30 bg-paypal-soft text-paypal-dark",
+    done: "animate-fade-up border-emerald-200 bg-emerald-50 text-emerald-900",
     muted: "border-zinc-200 bg-zinc-50 text-zinc-700",
     error: "border-red-200 bg-red-50 text-red-700",
   }[tone];

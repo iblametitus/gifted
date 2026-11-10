@@ -2,18 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { MAX_GROUP } from "@/lib/budget";
 import { post } from "@/lib/client";
 import { splitShares } from "@/lib/shares";
 import type { Suggestion } from "@/lib/types";
 import { CloseIcon } from "./icons";
 
-type Props = { gift: Suggestion | null; recipient: string; onClose: () => void };
+type Props = { gift: Suggestion | null; recipient: string; groupSize?: number | null; onClose: () => void };
 
 // Start a group gift: who you are, how many chip in, who it's for
-export function GroupDialog({ gift, recipient, onClose }: Props) {
+export function GroupDialog({ gift, recipient, groupSize, onClose }: Props) {
   const router = useRouter();
   const [organizer, setOrganizer] = useState("");
-  const [people, setPeople] = useState(3);
+  // Prefilled when the request already said "we're 5 friends"
+  const [people, setPeople] = useState(groupSize ? Math.min(MAX_GROUP, Math.max(2, groupSize)) : 3);
   const [forWhom, setForWhom] = useState(recipient);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export function GroupDialog({ gift, recipient, onClose }: Props) {
                 −
               </Step>
               <span className="w-8 text-center text-lg font-semibold">{people}</span>
-              <Step label="More people" onClick={() => setPeople((n) => Math.min(10, n + 1))} disabled={people >= 10}>
+              <Step label="More people" onClick={() => setPeople((n) => Math.min(MAX_GROUP, n + 1))} disabled={people >= MAX_GROUP}>
                 +
               </Step>
               <span className="ml-auto text-sm text-zinc-500">

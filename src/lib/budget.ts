@@ -22,6 +22,18 @@ export function budgetRange({ budgetUsd, approximate, minUsd }: Budget) {
   return { min, max };
 }
 
+// Group gifts: "5 friends, about $25 each" -> group of 5, total budget $125.
+// A group needs at least 2 people. A per-person budget only counts when the group size is known.
+export const MAX_GROUP = 10;
+
+export function groupBudget(opts: { groupSize: number | null; perPersonUsd: number | null; budgetUsd: number | null }) {
+  const size = opts.groupSize != null && Number.isInteger(opts.groupSize) && opts.groupSize >= 2 ? opts.groupSize : null;
+  if (size != null && opts.perPersonUsd != null && opts.perPersonUsd > 0) {
+    return { groupSize: size, budgetUsd: Math.round(opts.perPersonUsd * size * 100) / 100 };
+  }
+  return { groupSize: size, budgetUsd: opts.budgetUsd };
+}
+
 // Field beats text, text beats the assumed default
 export function resolveBudget(field: { budgetUsd?: number; budgetApprox?: boolean }, fromText: Budget) {
   let budget: Budget;

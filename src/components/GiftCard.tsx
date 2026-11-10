@@ -1,6 +1,7 @@
 "use client";
 
 import { useList } from "@/lib/saved";
+import { splitShares } from "@/lib/shares";
 import type { Suggestion } from "@/lib/types";
 import { HeartIcon } from "./icons";
 
@@ -10,9 +11,10 @@ type Props = {
   buying: boolean;
   onBuyNow: (ids: string[]) => void;
   onGroup: (s: Suggestion) => void;
+  groupSize?: number | null; // set when the request was a group gift: price per head comes first
 };
 
-export function GiftCard({ s, index, buying, onBuyNow, onGroup }: Props) {
+export function GiftCard({ s, index, buying, onBuyNow, onGroup, groupSize }: Props) {
   const favorites = useList("favorites");
   const cart = useList("cart");
   const isFavorite = favorites.has(s.id);
@@ -47,15 +49,37 @@ export function GiftCard({ s, index, buying, onBuyNow, onGroup }: Props) {
         <p className="mt-3 text-sm leading-relaxed text-zinc-600">{s.reason}</p>
 
         <div className="mt-auto pt-5">
-          <div className="flex items-baseline justify-between border-t border-zinc-100 pt-4">
-            <p className="text-xl font-semibold tracking-tight">${s.quote.total.toFixed(2)}</p>
-            <p className="text-xs text-zinc-500">
-              {s.quote.shipping === 0 ? "Free shipping" : `incl. $${s.quote.shipping.toFixed(2)} shipping`}
-            </p>
-          </div>
+          {groupSize ? (
+            <GroupPrice s={s} people={groupSize} />
+          ) : (
+            <div className="flex items-baseline justify-between border-t border-zinc-100 pt-4">
+              <p className="text-xl font-semibold tracking-tight">${s.quote.total.toFixed(2)}</p>
+              <p className="text-xs text-zinc-500">
+                {s.quote.shipping === 0 ? "Free shipping" : `incl. $${s.quote.shipping.toFixed(2)} shipping`}
+              </p>
+            </div>
+          )}
           <p className="mt-1 text-xs text-zinc-500">
             Arrives by {formatDate(s.quote.deliveryBy)} · sold via {s.merchant}
           </p>
+          {groupSize ? (
+            <div className="mt-4 flex flex-col items-center gap-1">
+              <button
+                onClick={() => onGroup(s)}
+                className="w-full rounded-full bg-zinc-900 py-3 text-sm font-medium text-white transition hover:bg-black"
+              >
+                Start group gift
+              </button>
+              <button
+                onClick={() => onBuyNow([s.id])}
+                disabled={buying}
+                className="py-1.5 text-sm text-zinc-500 underline-offset-2 transition hover:text-zinc-900 hover:underline disabled:opacity-40"
+              >
+                Buy it alone
+              </button>
+            </div>
+          ) : (
+          <>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               onClick={() => (inCart ? cart.remove(s.id) : cart.add(s))}
@@ -81,9 +105,28 @@ export function GiftCard({ s, index, buying, onBuyNow, onGroup }: Props) {
           >
             Gift together · split with friends
           </button>
+          </>
+          )}
         </div>
       </div>
     </article>
+  );
+}
+
+// "$24.80 each · 5 people", the total small underneath. Shares add up to the exact total.
+function GroupPrice({ s, people }: { s: Suggestion; people: number }) {
+  const each = splitShares(s.quote.total, people)[0];
+  return (
+    <div className="border-t border-zinc-100 pt-4">
+      <p className="flex items-baseline gap-2">
+        <span className="text-2xl font-semibold tracking-tight">${each.toFixed(2)}</span>
+        <span className="text-sm text-zinc-600">each · {people} people</span>
+      </p>
+      <p className="mt-0.5 text-xs text-zinc-500">
+        ${s.quote.total.toFixed(2)} total ·{" "}
+        {s.quote.shipping === 0 ? "free shipping" : `incl. $${s.quote.shipping.toFixed(2)} shipping`}
+      </p>
+    </div>
   );
 }
 

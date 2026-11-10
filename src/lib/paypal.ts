@@ -202,11 +202,17 @@ export async function authorizeOrder(orderId: string) {
   };
 }
 
-export async function captureAuthorization(authorizationId: string) {
+// amount may be less than reserved (the price dropped); final_capture releases the rest
+export async function captureAuthorization(authorizationId: string, amount?: number) {
   return paypal<{ id: string; status: string }>(
     `/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/capture`,
-    { final_capture: true },
+    amount == null ? { final_capture: true } : { final_capture: true, amount: usd(amount) },
   );
+}
+
+// Gives a collected share back in full (used when a group can't close after the first shares were taken)
+export async function refundCapture(captureId: string) {
+  return paypal<{ id: string; status: string }>(`/v2/payments/captures/${encodeURIComponent(captureId)}/refund`, {});
 }
 
 export async function voidAuthorization(authorizationId: string) {

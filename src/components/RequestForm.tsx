@@ -3,8 +3,8 @@
 import type { GiftFields } from "@/lib/types";
 
 const EXAMPLES = [
+  "We're 5 friends getting something for Lena's 30th. She loves climbing and coffee. About $25 each.",
   "My brother turns 30. He loves coffee and travels a lot. Around $80.",
-  "Something for my mom, she gardens every weekend and just started yoga. Max $50.",
   "Thank-you gift for a colleague who is into board games and good tea.",
 ];
 

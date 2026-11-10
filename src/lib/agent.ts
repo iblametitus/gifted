@@ -4,7 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { resolveBudget } from "./budget";
+import { groupBudget, resolveBudget } from "./budget";
 import { searchProducts, type Product } from "./channel3";
 import { quote } from "./shipping";
 import type { GiftFields, SearchEvent, SearchRequest, Suggestion } from "./types";
@@ -18,7 +18,18 @@ const GiftBrief = z.object({
   occasion: z.string().nullable(),
   interests: z.array(z.string()),
   // The model only reads the budget; the allowed range is computed in budget.ts
-  budget_usd: z.number().nullable().describe("The budget amount the user named, or the upper end of a range"),
+  budget_usd: z
+    .number()
+    .nullable()
+    .describe("The total budget the user named (for everyone together), or the upper end of a range"),
+  group_size: z
+    .number()
+    .nullable()
+    .describe("If several people give the gift together: how many, counting the user. Else null"),
+  per_person_usd: z
+    .number()
+    .nullable()
+    .describe("Only if the budget is per person ('$25 each', 'about 20 per head'): that amount. Else null"),
   budget_is_approximate: z
     .boolean()
     .describe("True only if the user softened it: 'around', 'about', 'roughly', '~', 'ish'"),
@@ -59,6 +70,8 @@ async function understandRequest(request: string, mayAsk: boolean): Promise<Gift
     system:
       `You turn a gift request into a search plan for a US product catalog. Today is ${today}. ` +
       "Prices are in USD. If no budget is given, leave the budget fields null. " +
+      "If several people give together ('we're 5 friends', 'the team', 'my sister and I'), set group_size " +
+      "(count the user too). If the budget is per person, set per_person_usd and leave budget_usd null. " +
       "Form fields override anything the free text says. " +
       asking +
       "Search queries name concrete product types, not the occasion.",
@@ -78,8 +91,13 @@ export async function findGifts(req: SearchRequest, emit: (event: SearchEvent) =
     return;
   }
 
-  const budget = resolveBudget(fields, {
+  const group = groupBudget({
+    groupSize: brief.group_size,
+    perPersonUsd: brief.per_person_usd,
     budgetUsd: brief.budget_usd,
+  });
+  const budget = resolveBudget(fields, {
+    budgetUsd: group.budgetUsd,
     approximate: brief.budget_is_approximate,
     minUsd: brief.min_price_usd,
   });
@@ -112,7 +130,13 @@ export async function findGifts(req: SearchRequest, emit: (event: SearchEvent) =
   emit({
     type: "result",
     result: {
-      understood: { recipient: brief.recipient, occasion: brief.occasion, interests: brief.interests },
+      understood: {
+        recipient: brief.recipient,
+        occasion: brief.occasion,
+        interests: brief.interests,
+        groupSize: group.groupSize,
+        perPersonUsd: group.groupSize ? brief.per_person_usd : null,
+      },
       budget,
       deliverBy,
       deliveryWarning,

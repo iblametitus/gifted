@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { budgetRange, resolveBudget } from "./budget.ts";
+import { budgetRange, groupBudget, resolveBudget } from "./budget.ts";
 import type { Product } from "./channel3.ts";
 import { splitShares } from "./shares.ts";
 import { cartQuote, quote, withFreshDelivery } from "./shipping.ts";
@@ -33,6 +33,23 @@ test("the budget field wins over the text", () => {
 
 test("the text budget is used when the field is empty", () => {
   assert.deepEqual(resolveBudget({}, fromText), { min: 48, max: 85, source: "text" });
+});
+
+test("a per-person budget is multiplied by the group size", () => {
+  assert.deepEqual(groupBudget({ groupSize: 5, perPersonUsd: 25, budgetUsd: 25 }), { groupSize: 5, budgetUsd: 125 });
+  assert.deepEqual(groupBudget({ groupSize: 3, perPersonUsd: 19.99, budgetUsd: null }), { groupSize: 3, budgetUsd: 59.97 });
+  // and then gets the usual "around" tolerance on the total
+  assert.equal(budgetRange({ budgetUsd: 125, approximate: true, minUsd: null }).max, 133);
+});
+
+test("a total group budget is kept as it is", () => {
+  assert.deepEqual(groupBudget({ groupSize: 4, perPersonUsd: null, budgetUsd: 100 }), { groupSize: 4, budgetUsd: 100 });
+});
+
+test("one person or an unknown size is no group", () => {
+  assert.deepEqual(groupBudget({ groupSize: 1, perPersonUsd: 25, budgetUsd: null }), { groupSize: null, budgetUsd: null });
+  assert.deepEqual(groupBudget({ groupSize: null, perPersonUsd: 25, budgetUsd: 80 }), { groupSize: null, budgetUsd: 80 });
+  assert.equal(groupBudget({ groupSize: 2.5, perPersonUsd: 10, budgetUsd: null }).groupSize, null);
 });
 
 test("no budget anywhere -> $100 assumed", () => {

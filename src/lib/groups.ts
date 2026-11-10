@@ -5,9 +5,11 @@ import { Redis } from "@upstash/redis";
 import { randomInt } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { captureAuthorization, voidAuthorization, type Address } from "./paypal";
+import { getProduct } from "./channel3";
+import { closeGroup, releaseAll, shortReceipt, type CancelReason, type ClosingDeps } from "./closing";
+import { captureAuthorization, refundCapture, voidAuthorization, type Address } from "./paypal";
 import { splitShares } from "./shares";
-import type { Quote } from "./shipping";
+import { quote, type Quote } from "./shipping";
 import type { Suggestion } from "./types";
 
 const COLLECT_DAYS = 3; // PayPal honors an authorization for 3 days
@@ -20,6 +22,9 @@ export type Contribution = {
   orderId: string;
   at: string;
   demo?: boolean; // simulated friend (DEMO_MODE only), never sent to PayPal
+  captureId?: string; // set once PayPal collected this share
+  charged?: number; // what was collected: less than amount if the price dropped before closing
+  refunded?: boolean; // collected, then given back because the group couldn't close
 };
 
 export type Group = {
@@ -36,10 +41,13 @@ export type Group = {
   shipTo: { name: string; address: Address } | null;
   status: "collecting" | "complete" | "cancelled";
   completedAt?: string;
+  cancelReason?: CancelReason;
+  // The agent's final check before collecting. priceNow is null if the product was gone (or the check failed)
+  closing?: { checkedAt: string; priceThen: number; priceNow: number | null };
 };
 
 export type PublicGroup = Omit<Group, "contributions" | "shipTo"> & {
-  contributors: { name: string; amount: number; demo: boolean }[];
+  contributors: { name: string; amount: number; charged: number | null; demo: boolean; receipt: string | null }[];
   nextShare: number | null;
 };
 
@@ -58,7 +66,7 @@ function redisStore(redis: Redis): Store {
   return {
     get: async (k) => (await redis.get<Group>(k)) ?? null,
     set: async (k, v) => void (await redis.set(k, v, { ex: KEEP_DAYS * 86400 })),
-    lock: async (k) => (await redis.set(k, "1", { nx: true, ex: 15 })) === "OK",
+    lock: async (k) => (await redis.set(k, "1", { nx: true, ex: 60 } /* closing = price check + one capture per person */)) === "OK",
     unlock: async (k) => void (await redis.del(k)),
   };
 }
@@ -139,7 +147,7 @@ export async function getGroup(id: string): Promise<Group | null> {
   if (!group || group.status !== "collecting" || new Date(group.expiresAt) > new Date()) return group;
   return withLock(id, async () => {
     const fresh = (await load(id))!;
-    if (fresh.status === "collecting") await cancel(fresh);
+    if (fresh.status === "collecting") await cancel(fresh, "expired");
     return fresh;
   });
 }
@@ -175,26 +183,40 @@ export async function addContribution(
   });
 }
 
-// Everyone is in: collect all shares at once. That's the moment the gift is bought.
+const closingDeps: ClosingDeps = {
+  getProduct,
+  quote,
+  capture: captureAuthorization,
+  refund: refundCapture,
+  release: voidAuthorization,
+};
+
+// Everyone is in: the agent re-checks price and stock, then collects all shares.
+// That's the moment the gift is bought. If anything fails, nobody pays (see closing.ts).
 async function complete(group: Group) {
-  for (const c of group.contributions) if (!c.demo) await captureAuthorization(c.authorizationId);
-  group.status = "complete";
-  group.completedAt = new Date().toISOString();
+  await closeGroup(group, closingDeps);
   await save(group);
 }
 
-async function cancel(group: Group) {
-  for (const c of group.contributions) if (!c.demo) await voidAuthorization(c.authorizationId).catch(console.error);
-  group.status = "cancelled";
+async function cancel(group: Group, reason: CancelReason) {
+  await releaseAll(group, closingDeps, reason);
   await save(group);
 }
 
-// What every visitor may see (no addresses, no PayPal ids)
+// What every visitor may see (no addresses, no full PayPal ids)
 export function toPublic(group: Group): PublicGroup {
   const { id, createdAt, expiresAt, product, quote, organizer, recipient, invite, shares, status, completedAt } = group;
   return {
     ...{ id, createdAt, expiresAt, product, quote, organizer, recipient, invite, shares, status, completedAt },
-    contributors: group.contributions.map((c) => ({ name: c.name, amount: c.amount, demo: !!c.demo })),
+    cancelReason: group.cancelReason,
+    closing: group.closing,
+    contributors: group.contributions.map((c) => ({
+      name: c.name,
+      amount: c.amount,
+      charged: c.refunded ? null : (c.charged ?? null),
+      demo: !!c.demo,
+      receipt: c.captureId && !c.refunded ? shortReceipt(c.captureId) : null,
+    })),
     nextShare: nextShare(group),
   };
 }
