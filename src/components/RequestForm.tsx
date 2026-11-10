@@ -2,15 +2,25 @@
 
 import type { GiftFields } from "@/lib/types";
 
+// Short chips; a click puts the whole sentence in (long sentences wrap badly on phones)
 const EXAMPLES = [
-  "We're 5 friends getting something for Lena's 30th. She loves climbing and coffee. About $25 each.",
-  "My brother turns 30. He loves coffee and travels a lot. Around $80.",
-  "Thank-you gift for a colleague who is into board games and good tea.",
+  {
+    label: "5 friends · Lena's 30th",
+    prompt: "We're 5 friends getting something for Lena's 30th. She loves climbing and coffee. About $25 each.",
+  },
+  {
+    label: "Team gift for a colleague",
+    prompt: "Our team of 8 says goodbye to a colleague who is into board games and good tea. About $15 each.",
+  },
+  {
+    label: "Just me · brother, 30",
+    prompt: "My brother turns 30. He loves coffee and travels a lot. Around $80.",
+  },
 ];
 
 const input =
-  "w-full rounded-xl border border-transparent bg-white px-3.5 py-2.5 text-[15px] text-zinc-900 outline-none transition " +
-  "placeholder:text-zinc-400 focus:ring-4 focus:ring-white/40";
+  "w-full rounded-xl border border-black/15 bg-white px-3.5 py-2.5 text-[15px] text-ink outline-none transition " +
+  "placeholder:text-ink/40 focus:border-ink focus:ring-4 focus:ring-ink/5";
 
 type Props = {
   prompt: string;
@@ -35,7 +45,7 @@ export function RequestForm({ prompt, fields, busy, detailsOpen, onPrompt, onFie
         e.preventDefault();
         if (hasInput && !busy) onSubmit();
       }}
-      className="rounded-3xl bg-paypal p-2 text-white shadow-[0_2px_4px_rgba(0,48,135,0.12),0_16px_40px_-16px_rgba(0,48,135,0.45)]"
+      className="rounded-3xl border-2 border-ink bg-white p-2"
     >
       <textarea
         value={prompt}
@@ -44,8 +54,9 @@ export function RequestForm({ prompt, fields, busy, detailsOpen, onPrompt, onFie
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
         }}
         rows={3}
-        placeholder="Tell us about them: who they are, what they love, your budget…"
-        className="block w-full resize-none rounded-2xl bg-white px-4 pt-4 pb-3 text-lg text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:ring-4 focus:ring-white/40"
+        aria-label="Who is it for, who gives together, what do they love, what budget?"
+        placeholder="Who's it for, who's chipping in, what do they love, how much each…"
+        className="block w-full resize-none rounded-2xl bg-white px-4 pt-4 pb-3 text-lg text-ink outline-none transition placeholder:text-ink/40"
       />
 
       <div className="flex items-center justify-between gap-3 px-2 pt-3">
@@ -54,11 +65,11 @@ export function RequestForm({ prompt, fields, busy, detailsOpen, onPrompt, onFie
           onClick={onToggleDetails}
           aria-expanded={detailsOpen}
           aria-controls="details"
-          className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white"
+          className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-ink/70 transition hover:bg-black/5 hover:text-ink"
         >
           {detailsOpen ? "Hide details" : "Add details"}
           {filled > 0 && (
-            <span className="rounded-full bg-white px-1.5 text-xs leading-5 font-semibold text-paypal-dark">{filled}</span>
+            <span className="rounded-full bg-ink px-1.5 text-xs leading-5 font-semibold text-white">{filled}</span>
           )}
           <svg
             viewBox="0 0 20 20"
@@ -70,7 +81,7 @@ export function RequestForm({ prompt, fields, busy, detailsOpen, onPrompt, onFie
         </button>
         <button
           disabled={!hasInput || busy}
-          className="h-11 rounded-full bg-paypal-dark px-6 font-medium text-white transition hover:bg-[#00225f] disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-11 rounded-full bg-ink px-6 font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? "Working on it…" : "Find gifts"}
         </button>
@@ -84,7 +95,7 @@ export function RequestForm({ prompt, fields, busy, detailsOpen, onPrompt, onFie
       >
         <div className="overflow-hidden">
           <div className="px-4 pt-4 pb-1">
-            <p className="mb-3 text-xs text-white/75">Optional. Anything you fill in here wins over the text.</p>
+            <p className="mb-3 text-xs text-ink/60">Optional. Anything you fill in here wins over the text.</p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="For">
                 <input
@@ -113,7 +124,7 @@ export function RequestForm({ prompt, fields, busy, detailsOpen, onPrompt, onFie
               <Field label="Budget (USD)" className="lg:col-span-2">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-zinc-400">$</span>
+                    <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-ink/40">$</span>
                     <input
                       id="budget"
                       className={`${input} pl-7`}
@@ -147,12 +158,13 @@ export function RequestForm({ prompt, fields, busy, detailsOpen, onPrompt, onFie
       <div className="flex flex-wrap gap-2 px-4 pt-3 pb-3">
         {EXAMPLES.map((example) => (
           <button
-            key={example}
+            key={example.label}
             type="button"
-            onClick={() => onPrompt(example)}
-            className="rounded-full border border-white/35 px-3 py-1.5 text-left text-xs text-white/90 transition hover:border-white hover:bg-white/10 hover:text-white"
+            title={example.prompt}
+            onClick={() => onPrompt(example.prompt)}
+            className="rounded-full border border-black/15 px-3 py-1.5 text-left text-xs text-ink/80 transition hover:border-ink hover:text-ink"
           >
-            {example}
+            {example.label}
           </button>
         ))}
       </div>
@@ -170,11 +182,11 @@ function BudgetMode({ approx, onChange }: { approx: boolean; onChange: (approx: 
     <div
       role="radiogroup"
       aria-label="Budget mode"
-      className="relative grid shrink-0 grid-cols-2 rounded-xl border border-white/40 p-1 text-sm"
+      className="relative grid shrink-0 grid-cols-2 rounded-xl border border-black/15 p-1 text-sm"
     >
       <span
         aria-hidden
-        className={`absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-sm transition-transform duration-200 ease-out ${
+        className={`absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-lg bg-ink transition-transform duration-200 ease-out ${
           approx ? "translate-x-full" : ""
         }`}
       />
@@ -187,7 +199,7 @@ function BudgetMode({ approx, onChange }: { approx: boolean; onChange: (approx: 
           title={o.hint}
           onClick={() => onChange(o.value)}
           className={`relative z-10 rounded-lg px-3 font-medium transition-colors ${
-            approx === o.value ? "text-paypal-dark" : "text-white/85 hover:text-white"
+            approx === o.value ? "text-white" : "text-ink/60 hover:text-ink"
           }`}
         >
           {o.label}
@@ -200,7 +212,7 @@ function BudgetMode({ approx, onChange }: { approx: boolean; onChange: (approx: 
 function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
     <label className={`block ${className}`}>
-      <span className="mb-1.5 block text-sm text-white/90">{label}</span>
+      <span className="mb-1.5 block text-sm text-ink/70">{label}</span>
       {children}
     </label>
   );

@@ -28,6 +28,7 @@ export type SearchResult = {
   // groupSize: set when several people give together ("we're 5 friends")
   understood: {
     recipient: string;
+    recipientLabel?: string; // "Lena", "my brother", "our colleague" (missing in older saved results)
     occasion: string | null;
     interests: string[];
     groupSize?: number | null;

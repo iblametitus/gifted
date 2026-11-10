@@ -142,6 +142,9 @@ export async function createGroup(input: Omit<Group, "id" | "createdAt" | "expir
 }
 
 // Reads a group and releases all reservations if time ran out
+// Read-only look (link previews, metadata): no expiry handling, no lock
+export const peekGroup = (id: string) => load(id);
+
 export async function getGroup(id: string): Promise<Group | null> {
   const group = await load(id);
   if (!group || group.status !== "collecting" || new Date(group.expiresAt) > new Date()) return group;

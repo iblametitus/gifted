@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ClearCart } from "@/components/ClearCart";
+import { ShareRing } from "@/components/ShareRing";
 import { Wordmark } from "@/components/Wordmark";
 import { captureOrder } from "@/lib/paypal";
 
@@ -43,21 +44,21 @@ async function Confirmation({ searchParams }: { searchParams: SearchParams }) {
   return (
     <div className="animate-fade-up mt-12">
       <ClearCart ids={unit.custom_id?.split(",") ?? []} />
-      <div className="flex size-12 items-center justify-center rounded-full bg-paypal-soft text-2xl">🎁</div>
-      <h1 className="mt-5 text-3xl font-semibold tracking-tight">You&apos;ve been Gifted.</h1>
-      <p className="mt-2 text-zinc-500">
+      <ShareRing shares={1} reserved={1} captured size={48} stroke={6} className="animate-ring-close" />
+      <h1 className="mt-5 font-display text-4xl font-semibold tracking-tight">You&apos;ve been Gifted.</h1>
+      <p className="mt-2 text-ink/60">
         Paid with PayPal{unit.shipping?.name?.full_name ? `, shipping to ${unit.shipping.name.full_name}` : ""}.
       </p>
 
-      <ul className="mt-8 divide-y divide-zinc-100 rounded-2xl border border-zinc-200 px-5">
+      <ul className="mt-8 divide-y divide-black/5 rounded-3xl border border-black/10 bg-white px-5">
         {(unit.items ?? []).map((item, i) => (
           <li key={i} className="flex justify-between gap-4 py-3 text-sm">
             <span>{item.name}</span>
-            <span className="shrink-0 text-zinc-600">${item.unit_amount.value}</span>
+            <span className="shrink-0 text-ink/70">${item.unit_amount.value}</span>
           </li>
         ))}
         {shipping && (
-          <li className="flex justify-between py-3 text-sm text-zinc-600">
+          <li className="flex justify-between py-3 text-sm text-ink/70">
             <span>Shipping</span>
             <span>{Number(shipping) === 0 ? "Free" : `$${shipping}`}</span>
           </li>
@@ -73,21 +74,21 @@ async function Confirmation({ searchParams }: { searchParams: SearchParams }) {
       <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
         {address && (
           <>
-            <dt className="text-zinc-500">Ships to</dt>
+            <dt className="text-ink/60">Ships to</dt>
             <dd>
               {address.address_line_1}, {address.admin_area_2}, {address.admin_area_1} {address.postal_code}
             </dd>
           </>
         )}
-        <dt className="text-zinc-500">Order</dt>
+        <dt className="text-ink/60">Order</dt>
         <dd className="font-mono text-xs leading-5">{order.id}</dd>
-        <dt className="text-zinc-500">Payment</dt>
+        <dt className="text-ink/60">Payment</dt>
         <dd className="font-mono text-xs leading-5">{capture.id}</dd>
       </dl>
 
       <Link
         href="/"
-        className="mt-10 inline-block rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white hover:bg-zinc-700"
+        className="mt-10 inline-block rounded-full bg-ink px-6 py-3 text-sm font-medium text-white hover:bg-black"
       >
         Find another gift
       </Link>
@@ -98,8 +99,8 @@ async function Confirmation({ searchParams }: { searchParams: SearchParams }) {
 function Message({ title, text }: { title: string; text: string }) {
   return (
     <div className="mt-12">
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-      <p className="mt-3 text-zinc-600">{text}</p>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">{title}</h1>
+      <p className="mt-3 text-ink/70">{text}</p>
       <Link href="/" className="mt-8 inline-block text-sm underline underline-offset-4">
         Back to start
       </Link>

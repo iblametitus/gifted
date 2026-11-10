@@ -14,7 +14,7 @@ export function AgentProgress({ reached, done }: { reached: StepState[]; done: b
   const currentIndex = STEPS.findIndex((s) => s.step === current);
 
   return (
-    <ol className="animate-fade-up space-y-4 rounded-2xl border border-zinc-200 p-6">
+    <ol className="animate-fade-up space-y-4 rounded-3xl border border-black/10 bg-white p-6">
       {STEPS.map(({ step, label }, i) => {
         const state = done || i < currentIndex ? "done" : i === currentIndex ? "active" : "pending";
         const detail = reached.find((r) => r.step === step)?.detail;
@@ -22,22 +22,22 @@ export function AgentProgress({ reached, done }: { reached: StepState[]; done: b
           <li key={step} className="flex gap-3">
             <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center">
               {state === "done" && (
-                <svg viewBox="0 0 20 20" className="size-5 text-paypal-dark" aria-hidden>
+                <svg viewBox="0 0 20 20" className="size-5 text-ink" aria-hidden>
                   <circle cx="10" cy="10" r="10" fill="currentColor" />
                   <path d="M6 10.5l2.5 2.5L14 7.5" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round" />
                 </svg>
               )}
               {state === "active" && (
                 <span className="relative flex size-3">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-paypal/40" />
-                  <span className="relative inline-flex size-3 rounded-full bg-paypal" />
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent/40" />
+                  <span className="relative inline-flex size-3 rounded-full bg-accent" />
                 </span>
               )}
-              {state === "pending" && <span className="size-3 rounded-full border border-zinc-300" />}
+              {state === "pending" && <span className="size-3 rounded-full border border-black/20" />}
             </span>
             <div>
-              <p className={state === "pending" ? "text-zinc-400" : "text-zinc-900"}>{label}</p>
-              {detail && <p className="mt-0.5 text-sm text-zinc-500">{detail}</p>}
+              <p className={state === "pending" ? "text-ink/40" : "text-ink"}>{label}</p>
+              {detail && <p className="mt-0.5 text-sm text-ink/60">{detail}</p>}
             </div>
           </li>
         );

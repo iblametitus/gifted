@@ -15,6 +15,13 @@ const client = new Anthropic();
 // Step 1: request -> structured search plan
 const GiftBrief = z.object({
   recipient: z.string().describe("Who the gift is for, e.g. 'brother, 30'. Empty if unknown"),
+  recipient_label: z
+    .string()
+    .describe(
+      "How the user would name them to friends, no age: their first name if given ('Lena'), else the relation " +
+        "with 'my' ('my brother', 'my mom'), or 'our' if several people give and share that relation " +
+        "('our colleague'). Empty if unknown",
+    ),
   occasion: z.string().nullable(),
   interests: z.array(z.string()),
   // The model only reads the budget; the allowed range is computed in budget.ts
@@ -132,6 +139,7 @@ export async function findGifts(req: SearchRequest, emit: (event: SearchEvent) =
     result: {
       understood: {
         recipient: brief.recipient,
+        recipientLabel: brief.recipient_label,
         occasion: brief.occasion,
         interests: brief.interests,
         groupSize: group.groupSize,
@@ -190,6 +198,7 @@ export async function writeInvite(opts: {
     output_config: { effort: "low", format: zodOutputFormat(Invite) },
     system:
       "Write a short, warm invite (2-3 sentences, English) for a group chat, asking friends to chip in on a group gift. " +
+      "The organizer posts it, so write in their voice (first person) and keep `recipient` as given ('my brother', 'Lena'). " +
       "Mention the gift, who it's for, the share per person and that nobody is charged unless everyone joins. " +
       "No hashtags, at most one emoji, don't include a link (it is added below).",
     messages: [{ role: "user", content: JSON.stringify(opts) }],

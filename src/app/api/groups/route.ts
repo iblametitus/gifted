@@ -4,6 +4,7 @@ import { createGroup } from "@/lib/groups";
 import { rateLimit } from "@/lib/guard";
 import { splitShares } from "@/lib/shares";
 import { quote } from "@/lib/shipping";
+import { cleanRecipient, recipientFor } from "@/lib/words";
 
 const MAX_PEOPLE = 10;
 
@@ -18,7 +19,9 @@ export async function POST(request: Request) {
   if (!Number.isInteger(people) || people < 2 || people > MAX_PEOPLE) {
     return Response.json({ error: `A group gift needs 2 to ${MAX_PEOPLE} people` }, { status: 400 });
   }
-  const recipient = text(body?.recipient, 40);
+  // The organizer writes "my brother"; friends read "Titus' brother"
+  const ownWords = cleanRecipient(text(body?.recipient, 40)) || null;
+  const recipient = ownWords ? recipientFor(ownWords, organizer) : null;
   const limited = await rateLimit(request, "group");
   if (limited) return limited;
 
@@ -30,13 +33,13 @@ export async function POST(request: Request) {
 
     const invite = await writeInvite({
       title: product.title,
-      recipient,
+      recipient: ownWords, // the invite is in the organizer's own voice
       organizer,
       share: splitShares(q.total, people)[0],
       people,
     }).catch((error) => {
       console.error(error);
-      return `${organizer} is putting together a group gift${recipient ? ` for ${recipient}` : ""}: ${product.title}. Chip in your share. Nobody is charged unless everyone joins.`;
+      return `I'm putting together a group gift${ownWords ? ` for ${ownWords}` : ""}: ${product.title}. Chip in your share. Nobody is charged unless everyone joins.`;
     });
 
     const group = await createGroup({

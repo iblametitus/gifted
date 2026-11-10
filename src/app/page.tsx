@@ -3,14 +3,13 @@
 import { useCallback, useRef, useState } from "react";
 import { AgentProgress, type StepState } from "@/components/AgentProgress";
 import { formatDate, GiftCard } from "@/components/GiftCard";
-import { CartIcon, HeartIcon } from "@/components/icons";
+import { HeroCard, ThreeSteps } from "@/components/HeroCard";
 import { Wordmark } from "@/components/Wordmark";
 import { RequestForm } from "@/components/RequestForm";
 import { GroupDialog } from "@/components/GroupDialog";
-import { SideSheet } from "@/components/SideSheet";
 import { post, streamSearch } from "@/lib/client";
-import { useList, type ListName } from "@/lib/saved";
 import { withFreshDelivery } from "@/lib/shipping";
+import { recipientLabel } from "@/lib/words";
 import type { GiftFields, SearchRequest, SearchResult, Suggestion } from "@/lib/types";
 
 type Meta = Omit<SearchResult, "suggestions">;
@@ -56,12 +55,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [buying, setBuying] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [sheet, setSheet] = useState<ListName | null>(null);
   const [groupGift, setGroupGift] = useState<Suggestion | null>(null);
   const closeGroup = useCallback(() => setGroupGift(null), []);
-  const closeSheet = useCallback(() => setSheet(null), []);
-  const cart = useList("cart");
-  const favorites = useList("favorites");
 
   // The request the current results belong to (frozen at submit, the form may change afterwards)
   const active = useRef<{ key: string; fields: GiftFields; effectivePrompt: string }>(null);
@@ -134,7 +129,7 @@ export default function Home() {
     if (!finished) setPhase(previous.length ? "done" : "idle");
   }
 
-  // One id = "Buy now", several = the cart
+  // "Buy it alone" (the cart is hidden for now, the API still takes several ids)
   async function buy(productIds: string[]) {
     setBuying(true);
     setError(null);
@@ -142,7 +137,6 @@ export default function Home() {
       const { approveUrl } = await post("/api/checkout", { productIds });
       window.location.assign(approveUrl);
     } catch (err) {
-      setSheet(null);
       setError((err as Error).message);
       setBuying(false);
     }
@@ -154,36 +148,31 @@ export default function Home() {
     <div className="flex min-h-full flex-col">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-6 sm:px-6">
         <Wordmark />
-        <div className="flex items-center gap-1">
-          <span className="mr-2 hidden rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-500 sm:inline">
-            PayPal Sandbox demo
-          </span>
-          <HeaderButton label="Favorites" count={favorites.items.length} onClick={() => setSheet("favorites")}>
-            <HeartIcon className="size-5" />
-          </HeaderButton>
-          <HeaderButton label="Cart" count={cart.items.length} onClick={() => setSheet("cart")}>
-            <CartIcon className="size-5" />
-          </HeaderButton>
-        </div>
+        <span className="rounded-full border border-black/10 px-2.5 py-1 text-xs text-ink/60">PayPal Sandbox demo</span>
       </header>
-      <SideSheet list={sheet} buying={buying} onClose={closeSheet} onCheckout={buy} />
       <GroupDialog
         key={groupGift?.id ?? "none"}
         gift={groupGift}
-        recipient={meta?.understood.recipient ?? ""}
+        recipient={recipientLabel(
+          meta?.understood.recipientLabel || meta?.understood.recipient,
+          (meta?.understood.groupSize ?? 0) > 1,
+        )}
         groupSize={meta?.understood.groupSize}
         onClose={closeGroup}
       />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-24 sm:px-6">
-        <section className="pt-10 pb-10 sm:pt-16">
-          <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-            The right gift. Handled.
-          </h1>
-          <p className="mt-4 max-w-xl text-lg text-zinc-500">
-            Describe them in a sentence or fill in a few details. We find three thoughtful gifts, check price and
-            delivery, and you pay with PayPal.
-          </p>
+        <section className="grid items-center gap-10 pt-6 pb-10 sm:pt-12 md:grid-cols-[1fr_auto] md:gap-12">
+          <div>
+            <h1 className="font-display text-5xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-6xl">
+              Group gifts without chasing anyone for money.
+            </h1>
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink/70">
+              One prompt finds the gift. Everyone reserves their share with PayPal. Nobody is charged unless everyone
+              is in.
+            </p>
+          </div>
+          <HeroCard />
         </section>
 
         <RequestForm
@@ -196,6 +185,12 @@ export default function Home() {
           onToggleDetails={() => setDetailsOpen((open) => !open)}
           onSubmit={submit}
         />
+
+        {phase === "idle" && rounds.length === 0 && (
+          <section aria-label="How it works" className="pt-12">
+            <ThreeSteps />
+          </section>
+        )}
 
         <div ref={resultsRef} className="scroll-mt-6 pt-12">
           {phase === "running" && rounds.length === 0 && <AgentProgress reached={steps} done={false} />}
@@ -220,9 +215,9 @@ export default function Home() {
 
           {rounds.map((round, i) => (
             <section key={i} className="mt-8">
-              {i > 0 && <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-zinc-500">More ideas</h2>}
+              {i > 0 && <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-ink/60">More ideas</h2>}
               {round.length === 0 ? (
-                <p className="text-zinc-600">
+                <p className="text-ink/70">
                   {i === 0
                     ? "Nothing in stock matches this budget. Try a higher budget or fewer constraints."
                     : "That's all we found for this request."}
@@ -255,7 +250,7 @@ export default function Home() {
             <div className="mt-10 flex justify-center">
               <button
                 onClick={moreIdeas}
-                className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium transition hover:border-zinc-900"
+                className="rounded-full border border-black/15 bg-white px-6 py-3 text-sm font-medium transition hover:border-ink"
               >
                 Show other ideas
               </button>
@@ -267,34 +262,11 @@ export default function Home() {
           )}
         </div>
       </main>
-    </div>
-  );
-}
 
-function HeaderButton({
-  label,
-  count,
-  onClick,
-  children,
-}: {
-  label: string;
-  count: number;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={`${label} (${count})`}
-      className="relative rounded-full p-2.5 text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-900"
-    >
-      {children}
-      {count > 0 && (
-        <span className="absolute top-0.5 right-0.5 flex min-w-[18px] items-center justify-center rounded-full bg-paypal px-1 text-[11px] font-semibold leading-[18px] text-white">
-          {count}
-        </span>
-      )}
-    </button>
+      <footer className="mx-auto w-full max-w-5xl border-t border-black/10 px-4 py-6 text-sm text-ink/60 sm:px-6">
+        Built with Claude, Channel3, PayPal Sandbox and Render.
+      </footer>
+    </div>
   );
 }
 
@@ -306,25 +278,26 @@ function FollowUp({ question, onAnswer }: { question: string; onAnswer: (text: s
         e.preventDefault();
         onAnswer(text);
       }}
-      className="animate-fade-up rounded-2xl border border-zinc-200 p-6"
+      className="animate-fade-up rounded-3xl border border-black/10 bg-white p-6"
     >
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">One quick question</p>
-      <p className="mt-2 text-lg">{question}</p>
+      <p className="text-xs font-medium uppercase tracking-wider text-ink/60">One quick question</p>
+      <p className="mt-2 font-display text-xl">{question}</p>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <input
           autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}
-          className="flex-1 rounded-xl border border-zinc-200 px-3.5 py-2.5 outline-none focus:border-zinc-900 focus:ring-4 focus:ring-zinc-900/5"
+          aria-label="Your answer"
+          className="flex-1 rounded-xl border border-black/15 px-3.5 py-2.5 outline-none focus:border-ink focus:ring-4 focus:ring-ink/5"
           placeholder="Your answer"
         />
         <button
           disabled={!text.trim()}
-          className="rounded-xl bg-zinc-900 px-5 py-2.5 font-medium text-white disabled:opacity-40"
+          className="rounded-xl bg-ink px-5 py-2.5 font-medium text-white disabled:opacity-40"
         >
           Continue
         </button>
-        <button type="button" onClick={() => onAnswer("No idea, surprise me.")} className="px-3 text-sm text-zinc-500 hover:text-zinc-900">
+        <button type="button" onClick={() => onAnswer("No idea, surprise me.")} className="px-3 text-sm text-ink/60 hover:text-ink">
           Skip
         </button>
       </div>
@@ -357,10 +330,10 @@ function Understood({ meta, savedAt, onSetBudget }: { meta: Meta; savedAt: strin
           {perHead}
           {budget.source === "assumed" && (
             <>
-              <span className="text-zinc-400"> · assumed · </span>
+              <span className="text-ink/50"> · assumed · </span>
               <button
                 onClick={onSetBudget}
-                className="underline underline-offset-2 hover:text-zinc-900"
+                className="underline underline-offset-2 hover:text-ink"
               >
                 set budget
               </button>
@@ -375,7 +348,7 @@ function Understood({ meta, savedAt, onSetBudget }: { meta: Meta; savedAt: strin
         </p>
       )}
       {savedAt && (
-        <p className="mt-3 text-xs text-zinc-500">
+        <p className="mt-3 text-xs text-ink/60">
           Your saved ideas from {new Date(savedAt).toLocaleDateString("en-US")}. Prices are checked again at checkout.
         </p>
       )}
@@ -386,7 +359,7 @@ function Understood({ meta, savedAt, onSetBudget }: { meta: Meta; savedAt: strin
 function Chip({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
   return (
     <span
-      className={`rounded-full border px-3 py-1 ${muted ? "border-dashed border-zinc-300 text-zinc-600" : "border-zinc-200 bg-zinc-50"}`}
+      className={`rounded-full border px-3 py-1 ${muted ? "border-dashed border-black/20 text-ink/70" : "border-black/10 bg-white"}`}
     >
       {children}
     </span>
