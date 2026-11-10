@@ -23,7 +23,7 @@ Everything runs on the **PayPal Sandbox**. No real money moves. Use this test bu
 
 | | |
 |---|---|
-| Email | `Judge@gmail.com` |
+| Email | `judge@gifted-demo.com` |
 | Password | `Judge123` |
 
 **Group gift (the main flow)**
@@ -40,6 +40,12 @@ Everything runs on the **PayPal Sandbox**. No real money moves. Use this test bu
 
 Want to see it live in two windows? Open the group link in a second (private) window before step 4:
 it refreshes every 3 seconds.
+
+**Without the demo: a real group of 5.** Four more test buyers play the friends:
+`judge-1@gifted-demo.com` to `judge-4@gifted-demo.com` (password `Judge123`, same as above). Start a group for
+5 people and reserve with the main test buyer. Then open the group link in a new private window for each
+friend and reserve with judge-1 to judge-4 (one private window each, PayPal remembers the last login).
+When the fifth share is in, the agent collects all five real PayPal payments.
 
 **Buy it alone:** click **Buy it alone** on any gift card, log in with the same test buyer and approve.
 Payment is captured right away and you land on the order confirmation.
